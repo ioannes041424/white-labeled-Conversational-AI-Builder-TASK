@@ -45,19 +45,19 @@ API keys are configured in environment variables for easy setup:
 1. Click "Create New Bot" on the homepage
 2. Enter a descriptive name for your bot
 3. Write a system prompt that defines the bot's personality and behavior
-4. Adjust creativity level (temperature) and select a voice
+4. Adjust creativity level (temperature) 
 5. Click "Create Bot"
 
 ### Chatting with Bots
 
 1. Click "Chat" on any bot card
 2. Type your message and press Enter or click Send
-3. The AI will respond with text and optional voice audio
-4. Click the play button to hear voice responses
+3. The AI will respond with text and voice audio
+4. Click the play button to hear/replay voice responses
 
 ### Managing Bots
 
-- **Edit**: Modify bot settings, prompts, and voice
+- **Edit**: Modify bot settings and prompts
 - **Delete**: Remove bots (soft delete preserves data)
 - **Clear Chat**: Start a new conversation session
 
