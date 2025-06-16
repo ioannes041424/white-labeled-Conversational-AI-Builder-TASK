@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Bot - Conversational AI Builder{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <h1 class="h2">
+                    <i class="fas fa-plus-circle me-2 text-primary"></i>
+                    Create New AI Bot
+                </h1>
+                <p class="text-muted">
+                    Configure your AI bot's personality, behavior, and voice settings.
+                </p>
+            </div>
+
+            <!-- Form Card -->
+            <div class="card shadow">
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Bot Name -->
+                        <div class="mb-4">
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-robot me-2"></i>{{ form.name.label }}
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.help_text %}
+                                <div class="form-text">{{ form.name.help_text }}</div>
+                            {% endif %}
+                            {% if form.name.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.name.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- System Prompt -->
+                        <div class="mb-4">
+                            <label for="{{ form.system_prompt.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-brain me-2"></i>{{ form.system_prompt.label }}
+                            </label>
+                            {{ form.system_prompt }}
+                            {% if form.system_prompt.help_text %}
+                                <div class="form-text">{{ form.system_prompt.help_text }}</div>
+                            {% endif %}
+                            {% if form.system_prompt.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.system_prompt.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Advanced Settings -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-cogs me-2"></i>Advanced Settings
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <!-- Temperature -->
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.temperature.id_for_label }}" class="form-label">
+                                            <i class="fas fa-thermometer-half me-2"></i>{{ form.temperature.label }}
+                                        </label>
+                                        {{ form.temperature }}
+                                        {% if form.temperature.help_text %}
+                                            <div class="form-text">{{ form.temperature.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.temperature.errors %}
+                                            <div class="text-danger small">
+                                                {% for error in form.temperature.errors %}
+                                                    <div>{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+
+                                    
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'bot_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Create Bot
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Tips Card -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Tips for Creating Great Bots
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li><strong>Be Specific:</strong> Clearly define your bot's role and expertise area.</li>
+                        <li><strong>Set Boundaries:</strong> Specify what your bot should and shouldn't do.</li>
+                        <li><strong>Add Personality:</strong> Give your bot a consistent tone and style.</li>
+                        <li><strong>Adjust Creativity:</strong> Lower temperature for factual responses, higher for creative ones.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

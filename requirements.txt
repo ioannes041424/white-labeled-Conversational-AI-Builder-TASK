@@ -1,0 +1,21 @@
+# Core Django
+Django==5.2.1
+python-dotenv==1.0.0
+
+# AI APIs
+azure-ai-inference==1.0.0b4
+elevenlabs==0.2.26
+requests==2.31.0
+
+# Image processing
+Pillow==10.4.0
+
+# Production dependencies
+gunicorn==21.2.0
+whitenoise==6.6.0
+dj-database-url==2.1.0
+
+# PostgreSQL adapter (for production deployment)
+# Comment out the line below for Windows development if installation fails
+# The app will automatically use SQLite if psycopg2 is not available
+psycopg2-binary==2.9.7
