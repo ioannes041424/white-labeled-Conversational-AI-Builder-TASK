@@ -8,9 +8,9 @@ This application fulfills the following requirements:
 
 ✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior  <br> 
 ✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses <br> 
-✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using ElevenLabs <br> 
+✅ **Provide both text and voice responses**: Text responses with voice synthesis using ElevenLabs <br> 
 ✅ **Voice response playback**: In-browser audio player with replay functionality <br> 
-✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup <br> 
+✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup and for security <br> 
 
 ## Features
 
