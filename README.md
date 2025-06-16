@@ -6,11 +6,11 @@ A simple, white-labeled Conversational AI Builder that allows users to create co
 
 This application fulfills the following requirements:
 
-✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior
-✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses
-✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using ElevenLabs
-✅ **Voice response playback**: In-browser audio player with replay functionality
-✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup
+✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior  <br> 
+✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses <br> 
+✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using ElevenLabs <br> 
+✅ **Voice response playback**: In-browser audio player with replay functionality <br> 
+✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup <br> 
 
 ## Features
 
