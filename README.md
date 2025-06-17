@@ -6,22 +6,22 @@ A simple, white-labeled Conversational AI Builder that allows users to create co
 
 This application fulfills the following requirements:
 
-✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior
-✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses
-✅ **Voice input capability**: Speech-to-text using Web Speech API (free, no API keys required)
-✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using Google Cloud Text-to-Speech
-✅ **Voice response playback**: In-browser audio player with replay functionality
-✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup
+✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior <br>
+✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses <br>
+✅ **Voice input capability**: Speech-to-text using Web Speech API (free, no API keys required) <br>
+✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using Google Cloud Text-to-Speech <br>
+✅ **Voice response playback**: In-browser audio player with replay functionality <br>
+✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup <br>
 
 ## Features
 
 - **Simple Bot Creation**: Enter a text prompt to define your AI bot's personality
 - **Real-time Chat**: Interactive messaging with AI-powered responses
-- **Voice Input**: Speech-to-text using browser's native Web Speech API (completely free!)
+- **Voice Input**: Speech-to-text using browser's native Web Speech API
 - **Voice Synthesis**: Automatic text-to-speech conversion for all AI responses
 - **Audio Playback**: Click-to-play voice responses with replay controls
 - **Clean UI**: Responsive, white-labeled interface built with Bootstrap
-- **Usage Monitoring**: Track Google Cloud Text-to-Speech API usage and remaining credits
+
 
 ## Technology Stack
 
@@ -30,8 +30,8 @@ This application fulfills the following requirements:
 - **AI API**: GitHub Models GPT-4
 - **Voice API**: Google Cloud Text-to-Speech
 - **Frontend**: Bootstrap 5, jQuery, HTML5 Audio
-- **Deployment**: Render with Gunicorn and WhiteNoise
-
+- **Deployment**: Render
+  
 ## Configuration
 
 API keys are configured in environment variables for easy setup:
@@ -53,14 +53,14 @@ API keys are configured in environment variables for easy setup:
 ### Chatting with Bots
 
 1. Click "Chat" on any bot card
-2. Type your message and press Enter or click Send
+2. Type or Speak your message and press Enter or click Send
 3. The AI will respond with text and voice audio
 4. Click the play button to hear/replay voice responses
 
 ### Managing Bots
 
 - **Edit**: Modify bot settings and prompts
-- **Delete**: Remove bots (soft delete preserves data)
+- **Delete**: Remove bots 
 - **Clear Chat**: Start a new conversation session
 
 ## Project Structure
