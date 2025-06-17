@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial scroll to bottom
     scrollToBottom();
 
+
+
     // Handle form submission
     chatForm.addEventListener('submit', function(e) {
         e.preventDefault();

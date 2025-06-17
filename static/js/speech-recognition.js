@@ -40,11 +40,25 @@ class SpeechRecognitionService {
     checkSupport() {
         // Check for Web Speech API support
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
+
         if (SpeechRecognition) {
             this.isSupported = true;
             this.SpeechRecognition = SpeechRecognition;
-            console.log('✅ Web Speech API supported');
+
+            // Additional mobile compatibility checks
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isIOS = /iphone|ipad|ipod/.test(userAgent);
+            const isAndroid = /android/.test(userAgent);
+
+            if (isIOS) {
+                console.log('✅ Web Speech API supported on iOS device');
+                // iOS has some limitations with continuous recognition
+            } else if (isAndroid) {
+                console.log('✅ Web Speech API supported on Android device');
+                // Android generally has better speech recognition support
+            } else {
+                console.log('✅ Web Speech API supported on desktop');
+            }
         } else {
             this.isSupported = false;
             console.warn('❌ Web Speech API not supported in this browser');
@@ -57,12 +71,20 @@ class SpeechRecognitionService {
         // Create recognition instance
         this.recognition = new this.SpeechRecognition();
 
-        // Configure recognition settings
-        this.recognition.continuous = true;           // Keep listening until manually stopped
-        this.recognition.interimResults = true;       // Show interim results
-        this.recognition.lang = 'en-US';             // Default language
-        this.recognition.maxAlternatives = 1;        // Only need best result
-        
+        // Detect mobile devices for optimized settings
+        this.isMobile = this.detectMobile();
+
+        // Configure recognition settings optimized for mobile compatibility
+        this.recognition.continuous = !this.isMobile;     // Disable continuous on mobile to prevent repetition
+        this.recognition.interimResults = !this.isMobile; // Disable interim results on mobile for stability
+        this.recognition.lang = 'en-US';                  // Default language
+        this.recognition.maxAlternatives = 1;             // Only need best result
+
+        // Mobile-specific optimizations
+        if (this.isMobile) {
+            this.maxListeningTime = 10000; // Shorter timeout for mobile (10 seconds)
+        }
+
         // Set up event handlers
         this.recognition.onstart = () => this.onStart();
         this.recognition.onresult = (event) => this.onResult(event);
@@ -72,6 +94,19 @@ class SpeechRecognitionService {
         this.recognition.onspeechend = () => this.onSpeechEnd();
         this.recognition.onaudiostart = () => this.onAudioStart();
         this.recognition.onaudioend = () => this.onAudioEnd();
+    }
+
+    detectMobile() {
+        // Comprehensive mobile detection
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isSmallScreen = window.innerWidth <= 768;
+
+        const isMobile = isMobileUA || (isTouchDevice && isSmallScreen);
+        console.log(`📱 Device detection: ${isMobile ? 'Mobile' : 'Desktop'} (UA: ${isMobileUA}, Touch: ${isTouchDevice}, Small: ${isSmallScreen})`);
+
+        return isMobile;
     }
 
     attachEventListeners() {
@@ -96,11 +131,16 @@ class SpeechRecognitionService {
         });
     }
 
-    startListening() {
+    async startListening() {
         if (!this.isSupported || this.isListening) return;
 
         try {
             console.log('🎤 Starting speech recognition...');
+
+            // Request microphone permission explicitly (especially important for mobile)
+            if (this.isMobile) {
+                await this.requestMicrophonePermission();
+            }
 
             // Store the original text in the input field
             this.originalText = this.inputElement.value;
@@ -119,6 +159,20 @@ class SpeechRecognitionService {
         } catch (error) {
             console.error('Error starting speech recognition:', error);
             this.showError('Failed to start voice input. Please try again.');
+        }
+    }
+
+    async requestMicrophonePermission() {
+        try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Stop the stream immediately - we just needed permission
+                stream.getTracks().forEach(track => track.stop());
+                console.log('📱 Microphone permission granted');
+            }
+        } catch (error) {
+            console.warn('📱 Microphone permission request failed:', error);
+            throw new Error('Microphone permission required for voice input');
         }
     }
 
@@ -148,6 +202,49 @@ class SpeechRecognitionService {
     }
 
     onResult(event) {
+        if (this.isMobile) {
+            // Mobile-optimized result handling - simpler and more reliable
+            this.handleMobileResults(event);
+        } else {
+            // Desktop result handling with interim results
+            this.handleDesktopResults(event);
+        }
+    }
+
+    handleMobileResults(event) {
+        // For mobile: only process final results to prevent repetition
+        let finalTranscript = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            }
+        }
+
+        if (finalTranscript) {
+            console.log('📱 Mobile final speech result:', finalTranscript);
+
+            // Clean up the transcript (remove extra spaces, trim)
+            finalTranscript = finalTranscript.trim().replace(/\s+/g, ' ');
+
+            // For mobile, replace the entire input content to prevent duplication
+            const existingText = this.originalText.trim();
+            const newText = existingText + (existingText ? ' ' : '') + finalTranscript;
+
+            this.inputElement.value = newText;
+            this.inputElement.focus();
+            this.inputElement.setSelectionRange(this.inputElement.value.length, this.inputElement.value.length);
+
+            // Stop listening after getting final result on mobile
+            setTimeout(() => {
+                if (this.isListening) {
+                    this.stopListening();
+                }
+            }, 500);
+        }
+    }
+
+    handleDesktopResults(event) {
         let newFinalTranscript = '';
         let interimTranscript = '';
 
@@ -164,7 +261,7 @@ class SpeechRecognitionService {
 
         // Handle final results - add to our accumulated final transcript
         if (newFinalTranscript) {
-            console.log('✅ Final speech result:', newFinalTranscript);
+            console.log('💻 Desktop final speech result:', newFinalTranscript);
             this.finalTranscript += newFinalTranscript;
 
             // Update input with original text + all final results
@@ -180,7 +277,7 @@ class SpeechRecognitionService {
 
         // Handle interim results - show them temporarily
         if (interimTranscript) {
-            console.log('⏳ Interim speech result:', interimTranscript);
+            console.log('⏳ Desktop interim speech result:', interimTranscript);
 
             // Show original text + final results + current interim
             const displayText = this.originalText.trim() +
@@ -200,9 +297,16 @@ class SpeechRecognitionService {
         this.finalTranscript = '';
 
         let errorMessage = 'Voice input error: ';
+        let shouldShowError = true;
+
         switch (event.error) {
             case 'no-speech':
-                errorMessage += 'No speech detected. Please try again.';
+                if (this.isMobile) {
+                    // On mobile, no-speech is common and less concerning
+                    errorMessage = 'No speech detected. Tap the microphone to try again.';
+                } else {
+                    errorMessage += 'No speech detected. Please try again.';
+                }
                 break;
             case 'audio-capture':
                 errorMessage += 'Microphone not accessible. Please check permissions.';
@@ -211,16 +315,26 @@ class SpeechRecognitionService {
                 errorMessage += 'Microphone permission denied. Please allow microphone access.';
                 break;
             case 'network':
-                errorMessage += 'Network error. Please check your connection.';
+                if (this.isMobile) {
+                    errorMessage += 'Network error. Check your connection and try again.';
+                } else {
+                    errorMessage += 'Network error. Please check your connection.';
+                }
                 break;
             case 'aborted':
-                errorMessage += 'Speech recognition was aborted.';
+                // Don't show error for aborted - it's usually intentional
+                shouldShowError = false;
+                break;
+            case 'service-not-allowed':
+                errorMessage += 'Speech service not available. Please try again later.';
                 break;
             default:
                 errorMessage += event.error;
         }
 
-        this.showError(errorMessage);
+        if (shouldShowError) {
+            this.showError(errorMessage);
+        }
     }
 
     onEnd() {
@@ -237,6 +351,16 @@ class SpeechRecognitionService {
         // Reset transcript variables for next session
         this.originalText = '';
         this.finalTranscript = '';
+
+        // Mobile-specific handling: prevent auto-restart issues
+        if (this.isMobile) {
+            // On mobile, ensure we don't accidentally restart
+            setTimeout(() => {
+                if (this.recognition) {
+                    this.recognition.abort(); // Ensure complete stop
+                }
+            }, 100);
+        }
 
         // Don't automatically restart - user must click button again
         // This prevents the annoying auto-restart behavior
@@ -331,7 +455,28 @@ class SpeechRecognitionService {
     getCurrentState() {
         return {
             supported: this.isSupported,
-            listening: this.isListening
+            listening: this.isListening,
+            isMobile: this.isMobile
+        };
+    }
+
+    // Get mobile-specific usage tips
+    getMobileUsageTips() {
+        if (!this.isMobile) return null;
+
+        return {
+            tips: [
+                "Speak clearly and at normal volume",
+                "Keep your device close to your mouth",
+                "Avoid background noise when possible",
+                "Tap the microphone button to start/stop",
+                "Speech will stop automatically after a pause"
+            ],
+            limitations: [
+                "Continuous listening may not work on all mobile browsers",
+                "Some mobile browsers require user interaction to start recording",
+                "Background apps may interfere with microphone access"
+            ]
         };
     }
 }

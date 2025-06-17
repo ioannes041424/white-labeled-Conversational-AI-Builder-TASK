@@ -1,9 +1,7 @@
 import uuid
 import os
-from datetime import date
 from django.core.files.storage import default_storage
 from django.conf import settings
-from .models import GoogleCloudTTSUsage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,54 +11,6 @@ def generate_session_id():
     """Generate a unique session ID for conversations"""
     return str(uuid.uuid4())
 
-
-def check_google_cloud_tts_credits(character_count=0):
-    """
-    Check if Google Cloud TTS credits are available for the current month
-
-    Args:
-        character_count (int): Number of characters to check against limit
-
-    Returns:
-        dict: Contains 'available', 'usage', 'limit', 'percentage' information
-    """
-    current_month = date.today().replace(day=1)
-
-    try:
-        usage, created = GoogleCloudTTSUsage.objects.get_or_create(
-            month=current_month,
-            defaults={
-                'characters_used': 0,
-                'characters_limit': 10000  # Warning limit for usage tracking
-            }
-        )
-        
-        available_credits = usage.characters_limit - usage.characters_used
-        can_use = available_credits >= character_count
-        usage_percentage = (usage.characters_used / usage.characters_limit) * 100
-        
-        return {
-            'available': can_use,
-            'usage': usage.characters_used,
-            'limit': usage.characters_limit,
-            'percentage': round(usage_percentage, 1),
-            'remaining': available_credits,
-            'is_near_limit': usage_percentage >= 80,
-            'is_over_limit': usage.characters_used >= usage.characters_limit
-        }
-        
-    except Exception as e:
-        logger.error(f"Error checking Google Cloud TTS credits: {str(e)}")
-        return {
-            'available': False,
-            'usage': 0,
-            'limit': 10000,
-            'percentage': 0,
-            'remaining': 0,
-            'is_near_limit': False,
-            'is_over_limit': True,
-            'error': str(e)
-        }
 
 
 def save_audio_file(audio_data, filename):
@@ -103,8 +53,7 @@ def cleanup_old_audio_files(days_old=7):
     """
     try:
         from datetime import datetime, timedelta
-        from django.core.files.storage import default_storage
-        
+
         cutoff_date = datetime.now() - timedelta(days=days_old)
         audio_dir = os.path.join(settings.MEDIA_ROOT, 'audio')
         

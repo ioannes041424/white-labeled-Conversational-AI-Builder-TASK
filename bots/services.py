@@ -1,12 +1,12 @@
 import json
 import requests
-from datetime import datetime, date
+from datetime import datetime
 from django.conf import settings
 from django.core.files.base import ContentFile
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
-from .models import GoogleCloudTTSUsage, Message
+from .models import Message
 import logging
 import re
 
@@ -88,57 +88,16 @@ def markdown_to_clean_text(text):
 class VoiceSelectionService:
     """Service for intelligently selecting Google Cloud Text-to-Speech voices based on bot characteristics"""
 
-    # Available Google Cloud Text-to-Speech voices with their characteristics
-    # Using natural Chirp3-HD voices for the most human-like speech (12 total)
+    # Best 4 most natural voices (2 male, 2 female)
     VOICE_PROFILES = {
-        # Chirp3-HD Voices - Most natural and human-like (all available English voices)
+        # Female voices - most natural
         'en-US-Chirp3-HD-Achernar': {  # Female, friendly and warm
             'name': 'Achernar',
             'gender': 'female',
-            'age': 'young_adult',
+            'age': 'adult',
             'tone': 'friendly',
             'accent': 'american',
-            'personality': ['helpful', 'professional', 'warm', 'customer_service', 'natural']
-        },
-        'en-US-Chirp3-HD-Aoede': {  # Female, melodic and artistic
-            'name': 'Aoede',
-            'gender': 'female',
-            'age': 'young_adult',
-            'tone': 'melodic',
-            'accent': 'american',
-            'personality': ['creative', 'artistic', 'expressive', 'musical', 'natural']
-        },
-        'en-US-Chirp3-HD-Puck': {  # Male, playful and energetic
-            'name': 'Puck',
-            'gender': 'male',
-            'age': 'young_adult',
-            'tone': 'playful',
-            'accent': 'american',
-            'personality': ['energetic', 'fun', 'creative', 'youthful', 'natural']
-        },
-        'en-US-Chirp3-HD-Charon': {  # Male, deep and authoritative
-            'name': 'Charon',
-            'gender': 'male',
-            'age': 'adult',
-            'tone': 'deep',
-            'accent': 'american',
-            'personality': ['authoritative', 'serious', 'professional', 'mature', 'natural']
-        },
-        'en-US-Chirp3-HD-Kore': {  # Female, gentle and caring
-            'name': 'Kore',
-            'gender': 'female',
-            'age': 'adult',
-            'tone': 'gentle',
-            'accent': 'american',
-            'personality': ['caring', 'nurturing', 'supportive', 'healthcare', 'natural']
-        },
-        'en-US-Chirp3-HD-Fenrir': {  # Male, strong and confident
-            'name': 'Fenrir',
-            'gender': 'male',
-            'age': 'adult',
-            'tone': 'confident',
-            'accent': 'american',
-            'personality': ['strong', 'confident', 'leadership', 'powerful', 'natural']
+            'personality': ['helpful', 'warm', 'conversational', 'natural']
         },
         'en-US-Chirp3-HD-Leda': {  # Female, elegant and sophisticated
             'name': 'Leda',
@@ -146,236 +105,167 @@ class VoiceSelectionService:
             'age': 'adult',
             'tone': 'elegant',
             'accent': 'american',
-            'personality': ['sophisticated', 'refined', 'professional', 'polished', 'natural']
+            'personality': ['sophisticated', 'professional', 'polished', 'natural']
         },
+
+        # Male voices - most natural
         'en-US-Chirp3-HD-Orus': {  # Male, warm and approachable
             'name': 'Orus',
             'gender': 'male',
             'age': 'adult',
             'tone': 'warm',
             'accent': 'american',
-            'personality': ['warm', 'approachable', 'friendly', 'supportive', 'natural']
+            'personality': ['warm', 'friendly', 'supportive', 'natural']
         },
-        'en-US-Chirp3-HD-Zephyr': {  # Female, light and breezy
-            'name': 'Zephyr',
-            'gender': 'female',
-            'age': 'young_adult',
-            'tone': 'light',
-            'accent': 'american',
-            'personality': ['cheerful', 'upbeat', 'optimistic', 'fresh', 'natural']
-        },
-
-        # Additional Chirp3-HD voices for more variety
-        'en-US-Chirp3-HD-Achird': {  # Male, technical and precise
-            'name': 'Achird',
+        'en-US-Chirp3-HD-Charon': {  # Male, deep and authoritative
+            'name': 'Charon',
             'gender': 'male',
             'age': 'adult',
-            'tone': 'precise',
+            'tone': 'authoritative',
             'accent': 'american',
-            'personality': ['technical', 'analytical', 'clear', 'informative', 'natural']
-        },
-        'en-US-Chirp3-HD-Autonoe': {  # Female, intelligent and articulate
-            'name': 'Autonoe',
-            'gender': 'female',
-            'age': 'adult',
-            'tone': 'articulate',
-            'accent': 'american',
-            'personality': ['intelligent', 'educational', 'clear', 'professional', 'natural']
-        },
-        'en-US-Chirp3-HD-Callirrhoe': {  # Female, flowing and expressive
-            'name': 'Callirrhoe',
-            'gender': 'female',
-            'age': 'young_adult',
-            'tone': 'expressive',
-            'accent': 'american',
-            'personality': ['expressive', 'dynamic', 'engaging', 'storytelling', 'natural']
-        },
-
-
+            'personality': ['authoritative', 'professional', 'confident', 'natural']
+        }
     }
 
     @classmethod
     def select_voice_for_bot(cls, bot_name, system_prompt):
         """
-        Intelligently select the best premium voice based on bot name and system prompt
-        Uses advanced scoring algorithm optimized for Studio and Wavenet voices
-
-        Args:
-            bot_name (str): Name of the bot
-            system_prompt (str): System prompt describing bot behavior
-
-        Returns:
-            str: Google Cloud Text-to-Speech voice name
+        AI-powered voice selection from 4 best voices based on bot name and system prompt
         """
-        # Combine bot name and system prompt for analysis
-        text_to_analyze = f"{bot_name} {system_prompt}".lower()
-        voice_scores = {}
+        logger.info(f"AI selecting voice for bot: '{bot_name}'")
 
-        for voice_id, profile in cls.VOICE_PROFILES.items():
-            score = 0
+        try:
+            # Import here to avoid circular imports
+            from django.conf import settings
+            from azure.ai.inference import ChatCompletionsClient
+            from azure.ai.inference.models import SystemMessage, UserMessage
+            from azure.core.credentials import AzureKeyCredential
 
-            # Premium voice bonus (Studio voices get higher priority)
-            if 'Studio' in voice_id:
-                score += 5  # Studio voices are premium
-            elif 'Wavenet' in voice_id:
-                score += 3  # Wavenet voices are high-quality
+            if not settings.GITHUB_TOKEN:
+                logger.warning("GitHub token not available, using simple fallback")
+                return cls._simple_fallback(bot_name, system_prompt)
 
-            # Enhanced gender detection with more keywords
-            gender_keywords = {
-                'female': ['female', 'woman', 'girl', 'lady', 'she', 'her', 'maya', 'sophia', 'emma', 'alice', 'bella', 'luna'],
-                'male': ['male', 'man', 'boy', 'guy', 'he', 'him', 'alex', 'john', 'mike', 'david', 'max', 'sam', 'coach']
-            }
+            # Initialize GitHub Models client
+            client = ChatCompletionsClient(
+                endpoint="https://models.github.ai/inference",
+                credential=AzureKeyCredential(settings.GITHUB_TOKEN),
+            )
 
-            for gender, keywords in gender_keywords.items():
-                if any(keyword in text_to_analyze for keyword in keywords):
-                    if profile['gender'] == gender:
-                        score += 8  # Strong gender match bonus
+            # Create AI prompt for voice selection
+            system_message = """You are an expert voice selector. Choose the BEST voice from these 4 options:
 
-            # Advanced personality and tone matching
-            personality_scoring = {
-                # High-priority matches (perfect fit)
-                'authoritative': {
-                    'keywords': ['expert', 'authority', 'leader', 'boss', 'manager', 'serious', 'professional', 'business', 'executive', 'advisor'],
-                    'bonus': 10
-                },
-                'friendly': {
-                    'keywords': ['friendly', 'warm', 'welcoming', 'approachable', 'kind', 'helpful', 'support', 'customer'],
-                    'bonus': 8
-                },
-                'confident': {
-                    'keywords': ['confident', 'assertive', 'modern', 'tech', 'technology', 'ai', 'smart', 'innovative'],
-                    'bonus': 8
-                },
-                'gentle': {
-                    'keywords': ['gentle', 'calm', 'peaceful', 'therapeutic', 'therapy', 'caring', 'empathetic', 'meditation', 'health'],
-                    'bonus': 10
-                },
-                'energetic': {
-                    'keywords': ['energetic', 'enthusiastic', 'excited', 'upbeat', 'dynamic', 'fitness', 'coach', 'motivate'],
-                    'bonus': 10
-                },
-                'professional': {
-                    'keywords': ['professional', 'business', 'corporate', 'formal', 'reliable', 'trustworthy'],
-                    'bonus': 7
-                },
-                'casual': {
-                    'keywords': ['casual', 'informal', 'friend', 'buddy', 'chat', 'conversation', 'relaxed'],
-                    'bonus': 6
-                },
-                'deep': {
-                    'keywords': ['wise', 'mentor', 'teacher', 'experienced', 'guru', 'guide', 'elder', 'master'],
-                    'bonus': 9
-                },
-                'neutral': {
-                    'keywords': ['neutral', 'balanced', 'versatile', 'general', 'standard', 'clear'],
-                    'bonus': 4
-                },
-                'warm': {
-                    'keywords': ['warm', 'supportive', 'guidance', 'help', 'assist', 'companion'],
-                    'bonus': 7
-                }
-            }
+1. en-US-Chirp3-HD-Achernar (female, friendly, warm, conversational)
+2. en-US-Chirp3-HD-Leda (female, elegant, sophisticated, professional)
+3. en-US-Chirp3-HD-Orus (male, warm, friendly, supportive)
+4. en-US-Chirp3-HD-Charon (male, authoritative, professional, confident)
 
-            # Score based on tone and personality matches
-            bot_tone = profile.get('tone', '')
-            for tone, config in personality_scoring.items():
-                if tone == bot_tone:
-                    # Check if any keywords match
-                    keyword_matches = sum(1 for keyword in config['keywords'] if keyword in text_to_analyze)
-                    if keyword_matches > 0:
-                        score += config['bonus'] + (keyword_matches * 2)
+Analyze BOTH the bot name AND the system prompt to determine:
+- Gender preference (male/female/neutral)
+- Personality type (professional/friendly/authoritative/warm)
+- Use case (business/casual/support/educational)
 
-            # Enhanced use case matching with Chirp3-HD voices only
-            use_case_mapping = {
-                'customer_service': {
-                    'keywords': ['customer', 'support', 'service', 'help', 'assistance', 'helpdesk'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
-                    'bonus': 15
-                },
-                'business': {
-                    'keywords': ['business', 'sales', 'marketing', 'corporate', 'executive', 'professional'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Leda'],
-                    'bonus': 12
-                },
-                'education': {
-                    'keywords': ['teach', 'learn', 'education', 'tutor', 'instructor', 'study', 'academic'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Autonoe', 'en-US-Chirp3-HD-Orus'],
-                    'bonus': 12
-                },
-                'healthcare': {
-                    'keywords': ['health', 'medical', 'doctor', 'nurse', 'therapy', 'wellness', 'care'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Kore', 'en-US-Chirp3-HD-Achernar'],
-                    'bonus': 15
-                },
-                'technology': {
-                    'keywords': ['tech', 'technology', 'ai', 'software', 'digital', 'computer', 'programming'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Achird', 'en-US-Chirp3-HD-Autonoe'],
-                    'bonus': 12
-                },
-                'creative': {
-                    'keywords': ['creative', 'artistic', 'design', 'writing', 'content', 'innovative'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Aoede', 'en-US-Chirp3-HD-Callirrhoe'],
-                    'bonus': 12
-                },
-                'fitness': {
-                    'keywords': ['fitness', 'coach', 'workout', 'exercise', 'health', 'training'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Fenrir'],
-                    'bonus': 12
-                },
-                'entertainment': {
-                    'keywords': ['fun', 'entertainment', 'game', 'story', 'adventure', 'playful'],
-                    'preferred_voices': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Zephyr', 'en-US-Chirp3-HD-Callirrhoe'],
-                    'bonus': 12
-                }
-            }
+Return ONLY the voice ID. Example: en-US-Chirp3-HD-Achernar"""
 
-            # Apply use case bonuses
-            for use_case, config in use_case_mapping.items():
-                if any(keyword in text_to_analyze for keyword in config['keywords']):
-                    if voice_id in config['preferred_voices']:
-                        score += config['bonus']
+            user_message = f"""Bot Name: "{bot_name}"
 
-            # Bot name analysis for better matching with Chirp3-HD voices only
-            name_patterns = {
-                'coach': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Fenrir'],
-                'assistant': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
-                'advisor': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Leda'],
-                'buddy': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Orus'],
-                'expert': ['en-US-Chirp3-HD-Achird', 'en-US-Chirp3-HD-Autonoe'],
-                'support': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
-                'wise': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Orus'],
-                'creative': ['en-US-Chirp3-HD-Aoede', 'en-US-Chirp3-HD-Callirrhoe'],
-                'teacher': ['en-US-Chirp3-HD-Autonoe', 'en-US-Chirp3-HD-Orus']
-            }
+System Prompt: "{system_prompt}"
 
-            for pattern, preferred_voices in name_patterns.items():
-                if pattern in bot_name.lower() and voice_id in preferred_voices:
-                    score += 8
+Based on the bot's name and role/personality described in the system prompt, which voice fits best?"""
 
-            voice_scores[voice_id] = score
+            messages = [
+                SystemMessage(content=system_message),
+                UserMessage(content=user_message)
+            ]
 
-        # Select the voice with the highest score, with fallback logic
-        if not voice_scores:
-            return 'en-US-Studio-O'  # Default fallback
+            # Get AI response
+            logger.info(f"Sending AI voice selection request for '{bot_name}'")
 
-        # Ensure we have at least one voice scored
-        if not voice_scores:
-            logger.warning("No voice scores calculated, using default Chirp3-HD-Achernar voice")
+            response = client.complete(
+                messages=messages,
+                model="openai/gpt-4o-mini",  # Use mini for faster, simpler responses
+                temperature=0.1,
+                max_tokens=150,
+                top_p=0.9
+            )
+
+            if response and response.choices and response.choices[0].message.content:
+                ai_response = response.choices[0].message.content.strip()
+                logger.info(f"AI raw response: '{ai_response}'")
+
+                # Extract voice ID from response
+                selected_voice = cls._extract_voice_from_response(ai_response)
+
+                if selected_voice:
+                    voice_name = cls.VOICE_PROFILES[selected_voice]['name']
+                    logger.info(f"🤖 AI selected voice: {voice_name} ({selected_voice}) for '{bot_name}'")
+                    return selected_voice
+                else:
+                    logger.warning(f"AI returned invalid voice: '{ai_response}', using fallback")
+                    return cls._simple_fallback(bot_name, system_prompt)
+            else:
+                logger.warning("AI returned empty response, using fallback")
+                return cls._simple_fallback(bot_name, system_prompt)
+
+        except Exception as e:
+            logger.error(f"Error in AI voice selection: {str(e)}")
+            return cls._simple_fallback(bot_name, system_prompt)
+
+    @classmethod
+    def _extract_voice_from_response(cls, ai_response):
+        """Extract valid voice ID from AI response"""
+        # Clean the response
+        cleaned = ai_response.strip().replace('"', '').replace("'", "")
+
+        # Check for exact voice ID matches
+        for voice_id in cls.VOICE_PROFILES.keys():
+            if voice_id in cleaned:
+                return voice_id
+
+        # Check for voice name matches
+        if "achernar" in cleaned.lower():
             return "en-US-Chirp3-HD-Achernar"
+        elif "leda" in cleaned.lower():
+            return "en-US-Chirp3-HD-Leda"
+        elif "orus" in cleaned.lower():
+            return "en-US-Chirp3-HD-Orus"
+        elif "charon" in cleaned.lower():
+            return "en-US-Chirp3-HD-Charon"
 
-        best_voice = max(voice_scores.items(), key=lambda x: x[1])
-        selected_voice_id = best_voice[0]
-        selected_voice_name = cls.VOICE_PROFILES[selected_voice_id]['name']
+        return None
 
-        logger.info(f"🎤 Voice selection for bot '{bot_name}': {selected_voice_name} (score: {best_voice[1]})")
-        logger.info(f"Voice analysis: '{text_to_analyze[:100]}...'")
+    @classmethod
+    def _simple_fallback(cls, bot_name, system_prompt):
+        """Simple fallback when AI fails"""
+        # Basic analysis as backup
+        name_lower = bot_name.lower()
+        prompt_lower = system_prompt.lower()
 
-        return selected_voice_id
+        # Check for obvious male names
+        if any(name in name_lower for name in ['john', 'mike', 'alex', 'david', 'james', 'coach', 'mr']):
+            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
+                return "en-US-Chirp3-HD-Charon"
+            else:
+                return "en-US-Chirp3-HD-Orus"
+        # Check for obvious female names
+        elif any(name in name_lower for name in ['sarah', 'emma', 'lisa', 'maya', 'anna', 'assistant']):
+            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
+                return "en-US-Chirp3-HD-Leda"
+            else:
+                return "en-US-Chirp3-HD-Achernar"
+        # Default based on context
+        elif any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
+            return "en-US-Chirp3-HD-Leda"  # Professional default
+        else:
+            return "en-US-Chirp3-HD-Achernar"  # Friendly default
+
+
 
     @classmethod
     def get_voice_name(cls, voice_id):
         """Get the human-readable name for a voice ID"""
         return cls.VOICE_PROFILES.get(voice_id, {}).get('name', 'Unknown')
+
+
 
 
 class GPTService:
@@ -390,7 +280,7 @@ class GPTService:
                 return
 
             endpoint = "https://models.github.ai/inference"
-            model = "openai/gpt-4.1"
+            model = "openai/gpt-4o"  # Correct format: publisher/model_name
 
             self.client = ChatCompletionsClient(
                 endpoint=endpoint,
@@ -420,7 +310,7 @@ class GPTService:
                 messages=messages,
                 model=self.model,
                 temperature=bot.temperature,
-                max_tokens=500,
+                max_tokens=600,
                 top_p=1.0
             )
 
@@ -542,40 +432,12 @@ class GoogleCloudTTSService:
             logger.error(f"REST API request failed: {response.status_code} - {response.text}")
             return None
     
-    def _check_credits(self, character_count):
-        """Check if we have enough Google Cloud TTS credits"""
-        current_month = date.today().replace(day=1)
-        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
-            month=current_month,
-            defaults={'characters_used': 0, 'characters_limit': 10000}
-        )
 
-        return (usage.characters_used + character_count) <= usage.characters_limit
-
-    def _update_usage(self, character_count):
-        """Update Google Cloud TTS usage tracking"""
-        current_month = date.today().replace(day=1)
-        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
-            month=current_month,
-            defaults={'characters_used': 0, 'characters_limit': 10000}
-        )
-
-        usage.characters_used += character_count
-        usage.save()
-
-    def get_current_usage(self):
-        """Get current month's usage statistics"""
-        current_month = date.today().replace(day=1)
-        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
-            month=current_month,
-            defaults={'characters_used': 0, 'characters_limit': 10000}
-        )
-        return usage
 
 
 class ConversationManager:
     """Service for managing conversations and message flow"""
-    
+
     def __init__(self):
         self.gpt_service = GPTService()
         self.tts_service = GoogleCloudTTSService()
@@ -648,6 +510,6 @@ class ConversationManager:
                 'error': str(e)
             }
     
-    def get_usage_info(self):
-        """Get current Google Cloud TTS usage information"""
-        return self.tts_service.get_current_usage()
+
+
+

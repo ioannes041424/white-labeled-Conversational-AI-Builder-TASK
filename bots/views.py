@@ -9,10 +9,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 import uuid
+import logging
 from .models import ConversationalBot, Conversation, Message
 from .forms import BotCreateForm, BotEditForm, ChatMessageForm
 from .services import ConversationManager, VoiceSelectionService, GPTService, GoogleCloudTTSService
 from .utils import generate_session_id
+
+logger = logging.getLogger(__name__)
 
 
 class BotListView(ListView):
@@ -36,7 +39,6 @@ class BotCreateView(CreateView):
     model = ConversationalBot
     form_class = BotCreateForm
     template_name = 'bots/bot_create.html'
-    success_url = reverse_lazy('bot_list')
 
     def form_valid(self, form):
         # Automatically select the best voice for this bot
@@ -52,9 +54,13 @@ class BotCreateView(CreateView):
 
         messages.success(
             self.request,
-            f'Bot "{bot.name}" created successfully! AI selected voice: {voice_name}'
+            f'Bot "{bot.name}" created successfully! AI selected voice: {voice_name}. Starting chat...'
         )
         return super().form_valid(form)
+
+    def get_success_url(self):
+        # Redirect to chat interface instead of bot list
+        return reverse('chat', kwargs={'bot_id': self.object.id})
 
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
@@ -130,8 +136,6 @@ class ChatView(View):
 
         # Get message history
         messages_list = conversation.messages.order_by('timestamp')
-
-
 
         context = {
             'bot': bot,

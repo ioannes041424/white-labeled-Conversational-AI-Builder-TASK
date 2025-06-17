@@ -20,6 +20,9 @@ body {
     background-color: #f8f9fa;
     line-height: 1.6;
 }
+.navbar.bg-gradient-custom {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%) !important;
+}
 
 /* Navigation */
 .navbar-brand {
@@ -208,12 +211,6 @@ body {
     to { transform: translateX(0); }
 }
 
-/* Footer */
-footer {
-    margin-top: auto;
-    background-color: var(--light-color) !important;
-    border-top: 1px solid #dee2e6;
-}
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
