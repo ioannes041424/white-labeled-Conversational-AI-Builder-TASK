@@ -26,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-x3@)h*cm%nuh*u3(t8f6bfho9%kx$z4v(&*y5t#ihq&b*ck$em')
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-development-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
@@ -35,7 +35,15 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # API Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY')
+
+# Google Cloud Text-to-Speech API Configuration
+# Using API Key authentication (simple and unlimited)
+GOOGLE_CLOUD_API_KEY = os.getenv('GOOGLE_CLOUD_API_KEY')
+
+# Legacy authentication methods (NO LONGER NEEDED with API key)
+# GOOGLE_CLOUD_PROJECT = os.getenv('GOOGLE_CLOUD_PROJECT')
+# GOOGLE_APPLICATION_CREDENTIALS = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+# GOOGLE_CLOUD_CREDENTIALS = os.getenv('GOOGLE_CLOUD_CREDENTIALS')
 
 
 # Application definition

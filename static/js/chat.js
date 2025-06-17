@@ -66,22 +66,23 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             hideTypingIndicator();
-            
+
             if (data.success) {
                 // Add AI response to UI
                 addMessageToUI('ai', data.ai_message.content, data.ai_message.audio_url);
 
-                // Auto-play audio if available
+                // MANDATORY: Auto-play audio for every AI response
                 if (data.ai_message.audio_url) {
-                    setTimeout(() => {
-                        autoPlayAudio(data.ai_message.audio_url);
-                    }, 500); // Small delay to ensure message is rendered
+                    // Immediate auto-play without delay for seamless experience
+                    autoPlayAudio(data.ai_message.audio_url);
+                } else {
+                    // Log when audio is missing (this should not happen)
+                    console.warn('AI response received without audio - this should not happen');
+                    if (data.audio_error) {
+                        console.error('Audio generation error:', data.audio_error);
+                    }
                 }
 
-                // Update usage display if provided
-                if (data.usage_display) {
-                    updateUsageDisplay(data.usage_display);
-                }
             } else {
                 // Show error message
                 addErrorMessage(data.error || 'Failed to send message');
@@ -294,27 +295,99 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Auto-play audio (for new AI responses)
+    // Auto-play audio (for new AI responses) - Enhanced for better reliability
     function autoPlayAudio(audioUrl) {
         try {
-            // Create a temporary audio element for auto-play
-            const audio = new Audio(audioUrl);
-            audio.volume = 0.8; // Slightly lower volume for auto-play
+            console.log('Attempting to auto-play AI voice response:', audioUrl);
 
-            // Play the audio
+            // Create audio element for auto-play
+            const audio = new Audio(audioUrl);
+            audio.volume = 0.9; // Good volume for voice responses
+            audio.preload = 'auto'; // Preload for faster playback
+
+            // Add event listeners for better debugging
+            audio.addEventListener('loadstart', () => {
+                console.log('Audio loading started');
+            });
+
+            audio.addEventListener('canplay', () => {
+                console.log('Audio can start playing');
+            });
+
+            audio.addEventListener('error', (e) => {
+                console.error('Audio loading error:', e);
+                showAudioFallbackNotification();
+            });
+
+            // Attempt to play immediately
             const playPromise = audio.play();
 
             if (playPromise !== undefined) {
                 playPromise.then(() => {
-                    console.log('Auto-playing AI response audio');
+                    console.log('✅ Auto-playing AI voice response successfully');
+
+                    // Add visual indicator that audio is playing
+                    showAudioPlayingIndicator();
+
+                    // Clean up when audio ends
+                    audio.addEventListener('ended', () => {
+                        console.log('Auto-play audio finished');
+                        hideAudioPlayingIndicator();
+                    });
+
                 }).catch(error => {
-                    console.log('Auto-play prevented by browser:', error);
-                    // Show a subtle notification that audio is available
-                    AIBuilder.showToast('🔊 Audio response available - click play button to hear', 'info');
+                    console.warn('Auto-play prevented by browser policy:', error.message);
+                    showAudioFallbackNotification();
                 });
             }
         } catch (error) {
-            console.error('Error auto-playing audio:', error);
+            console.error('Error in auto-play function:', error);
+            showAudioFallbackNotification();
+        }
+    }
+
+    // Show notification when auto-play fails
+    function showAudioFallbackNotification() {
+        // Try to use the global toast function if available
+        if (typeof AIBuilder !== 'undefined' && AIBuilder.showToast) {
+            AIBuilder.showToast('🔊 Voice response ready - click the play button to hear it', 'info');
+        } else {
+            // Fallback: show a simple browser notification
+            console.log('🔊 Voice response available - click play button to hear');
+        }
+    }
+
+    // Visual indicator for audio playing
+    function showAudioPlayingIndicator() {
+        // Add a subtle visual indicator that audio is playing
+        const indicator = document.createElement('div');
+        indicator.id = 'audio-playing-indicator';
+        indicator.className = 'audio-playing-indicator';
+        indicator.innerHTML = '<i class="fas fa-volume-up"></i> Playing voice response...';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1050;
+            animation: fadeIn 0.3s ease-in;
+        `;
+        document.body.appendChild(indicator);
+    }
+
+    function hideAudioPlayingIndicator() {
+        const indicator = document.getElementById('audio-playing-indicator');
+        if (indicator) {
+            indicator.style.animation = 'fadeOut 0.3s ease-out';
+            setTimeout(() => {
+                if (indicator.parentNode) {
+                    indicator.remove();
+                }
+            }, 300);
         }
     }
 
@@ -360,52 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Update usage display
-    function updateUsageDisplay(usageData) {
-        // Update usage text and styling
-        const usageElements = document.querySelectorAll('.usage-display');
-        usageElements.forEach(element => {
-            element.innerHTML = usageData.display_text;
-            element.className = `usage-display ${usageData.css_class}`;
-        });
 
-        // Update or create limit warning alerts
-        const voiceUsageSection = document.querySelector('.voice-usage-section');
-        if (voiceUsageSection) {
-            // Remove existing limit warnings
-            const existingWarnings = voiceUsageSection.querySelectorAll('.limit-warning');
-            existingWarnings.forEach(warning => warning.remove());
-
-            // Add new limit warnings based on usage
-            if (usageData.characters_used >= 10000) {
-                const dangerAlert = document.createElement('div');
-                dangerAlert.className = 'alert alert-danger alert-sm mt-2 limit-warning';
-                dangerAlert.innerHTML = `
-                    <i class="fas fa-exclamation-triangle me-1"></i>
-                    <small><strong>Voice Limit Reached:</strong> Voice functionality is disabled after 10,000 characters. New messages will not have audio.</small>
-                `;
-                voiceUsageSection.appendChild(dangerAlert);
-            } else if (usageData.characters_used >= 9000) {
-                const warningAlert = document.createElement('div');
-                warningAlert.className = 'alert alert-warning alert-sm mt-2 limit-warning';
-                warningAlert.innerHTML = `
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    <small><strong>Voice Limit Warning:</strong> You're approaching the 10,000 character limit. Voice will stop working once reached.</small>
-                `;
-                voiceUsageSection.appendChild(warningAlert);
-            }
-        }
-
-        // Show warning toast if needed
-        if (usageData.show_warning && usageData.warning_message) {
-            AIBuilder.showToast(usageData.warning_message, 'warning');
-        }
-
-        // Show limit reached toast
-        if (usageData.characters_used >= 10000) {
-            AIBuilder.showToast('Voice limit reached! Audio generation is now disabled.', 'error');
-        }
-    }
 
     // Get CSRF token
     function getCsrfToken() {

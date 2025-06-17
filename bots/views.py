@@ -11,8 +11,8 @@ import json
 import uuid
 from .models import ConversationalBot, Conversation, Message
 from .forms import BotCreateForm, BotEditForm, ChatMessageForm
-from .services import ConversationManager, VoiceSelectionService
-from .utils import generate_session_id, check_elevenlabs_credits, format_usage_display
+from .services import ConversationManager, VoiceSelectionService, GPTService, GoogleCloudTTSService
+from .utils import generate_session_id
 
 
 class BotListView(ListView):
@@ -27,9 +27,7 @@ class BotListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Add usage information
-        usage_info = check_elevenlabs_credits()
-        context['usage_display'] = format_usage_display(usage_info)
+
         return context
 
 
@@ -47,7 +45,7 @@ class BotCreateView(CreateView):
             bot.name,
             bot.system_prompt
         )
-        bot.voice_id = selected_voice
+        bot.voice_name = selected_voice
 
         # Get voice name for the success message
         voice_name = VoiceSelectionService.get_voice_name(selected_voice)
@@ -80,7 +78,7 @@ class BotEditView(UpdateView):
             bot.name,
             bot.system_prompt
         )
-        bot.voice_id = selected_voice
+        bot.voice_name = selected_voice
 
         # Get voice name for the success message
         voice_name = VoiceSelectionService.get_voice_name(selected_voice)
@@ -133,15 +131,13 @@ class ChatView(View):
         # Get message history
         messages_list = conversation.messages.order_by('timestamp')
 
-        # Get usage information
-        usage_info = check_elevenlabs_credits()
+
 
         context = {
             'bot': bot,
             'conversation': conversation,
             'messages': messages_list,
             'form': ChatMessageForm(),
-            'usage_display': format_usage_display(usage_info),
             'session_id': session_id
         }
 
@@ -195,12 +191,10 @@ class SendMessageView(View):
                         'content': ai_message.content,
                         'timestamp': ai_message.timestamp.strftime('%H:%M'),
                         'audio_url': ai_message.audio_file.url if ai_message.audio_file else None
-                    }
+                    },
+                    'audio_generated': result.get('audio_generated', False),
+                    'audio_error': result.get('audio_error', None)
                 }
-
-                # Update usage info
-                usage_info = check_elevenlabs_credits()
-                response_data['usage_display'] = format_usage_display(usage_info)
 
                 return JsonResponse(response_data)
             else:
@@ -278,8 +272,8 @@ class APITestView(View):
 
             ai_response = response.choices[0].message.content.strip()
 
-            # Test ElevenLabs API
-            tts_service = ElevenLabsService()
+            # Test Google Cloud TTS API
+            tts_service = GoogleCloudTTSService()
             audio_success = False
             audio_error = None
 

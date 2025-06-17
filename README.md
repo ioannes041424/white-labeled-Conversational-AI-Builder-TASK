@@ -1,6 +1,6 @@
 # Conversational AI Builder
 
-A simple, white-labeled Conversational AI Builder that allows users to create conversational AI bots with both text and voice responses. Built with Django, powered by GitHub Models GPT-4 and ElevenLabs text-to-speech.
+A simple, white-labeled Conversational AI Builder that allows users to create conversational AI bots with both text and voice responses. Built with Django, powered by GitHub Models GPT-4 and Google Cloud Text-to-Speech.
 
 ## 🔹 Task Implementation 🔹
 
@@ -8,7 +8,8 @@ This application fulfills the following requirements:
 
 ✅ **Enter a text prompt**: Users can create AI bots by entering system prompts that define bot behavior
 ✅ **Generate conversational AI bot**: Powered by GitHub Models GPT-4 API for intelligent responses
-✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using ElevenLabs
+✅ **Voice input capability**: Speech-to-text using Web Speech API (free, no API keys required)
+✅ **Provide both text and voice responses**: Text responses with optional voice synthesis using Google Cloud Text-to-Speech
 ✅ **Voice response playback**: In-browser audio player with replay functionality
 ✅ **Hardcoded credentials**: API keys are configured in environment variables for easy setup
 
@@ -16,17 +17,18 @@ This application fulfills the following requirements:
 
 - **Simple Bot Creation**: Enter a text prompt to define your AI bot's personality
 - **Real-time Chat**: Interactive messaging with AI-powered responses
+- **Voice Input**: Speech-to-text using browser's native Web Speech API (completely free!)
 - **Voice Synthesis**: Automatic text-to-speech conversion for all AI responses
 - **Audio Playback**: Click-to-play voice responses with replay controls
 - **Clean UI**: Responsive, white-labeled interface built with Bootstrap
-- **Usage Monitoring**: Track ElevenLabs API usage and remaining credits
+- **Usage Monitoring**: Track Google Cloud Text-to-Speech API usage and remaining credits
 
 ## Technology Stack
 
 - **Backend**: Django 5.2.1 (Python)
 - **Database**: SQLite (development), PostgreSQL/Supabase (production)
 - **AI API**: GitHub Models GPT-4
-- **Voice API**: ElevenLabs
+- **Voice API**: Google Cloud Text-to-Speech
 - **Frontend**: Bootstrap 5, jQuery, HTML5 Audio
 - **Deployment**: Render with Gunicorn and WhiteNoise
 
@@ -35,7 +37,7 @@ This application fulfills the following requirements:
 API keys are configured in environment variables for easy setup:
 
 - **GitHub Models API**: Used for GPT-4 conversational AI responses
-- **ElevenLabs API**: Used for text-to-speech voice synthesis
+- **Google Cloud Text-to-Speech API**: Used for text-to-speech voice synthesis
 - **Database**: PostgreSQL (Supabase) for production, SQLite for development
 
 ## Usage
@@ -97,7 +99,7 @@ conversational_ai_builder/
 ## Acknowledgments
 
 - GitHub Models for GPT-4 API access
-- ElevenLabs for text-to-speech API
+- Google Cloud for text-to-speech API
 - Django framework for Development
 - Bootstrap for responsive design
 - Render for hosting platform

@@ -46,10 +46,14 @@
                         <div class="mb-4">
                             <label for="{{ form.system_prompt.id_for_label }}" class="form-label fw-bold">
                                 <i class="fas fa-brain me-2"></i>{{ form.system_prompt.label }}
+                                <button type="button" id="voice-prompt-btn" class="btn btn-outline-secondary btn-sm ms-2"
+                                        title="Click to speak your system prompt">
+                                    <i class="fas fa-microphone"></i>
+                                </button>
                             </label>
                             {{ form.system_prompt }}
                             {% if form.system_prompt.help_text %}
-                                <div class="form-text">{{ form.system_prompt.help_text }}</div>
+                                <div class="form-text">{{ form.system_prompt.help_text }} You can also use the microphone button to speak your prompt.</div>
                             {% endif %}
                             {% if form.system_prompt.errors %}
                                 <div class="text-danger small">
@@ -165,4 +169,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/speech-recognition.js' %}"></script>
 {% endblock %}

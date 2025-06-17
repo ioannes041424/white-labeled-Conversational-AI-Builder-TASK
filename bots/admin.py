@@ -1,11 +1,11 @@
 from django.contrib import admin
-from .models import ConversationalBot, Conversation, Message, ElevenLabsUsage
+from .models import ConversationalBot, Conversation, Message, GoogleCloudTTSUsage
 
 
 @admin.register(ConversationalBot)
 class ConversationalBotAdmin(admin.ModelAdmin):
-    list_display = ['name', 'temperature', 'voice_id', 'is_active', 'created_at']
-    list_filter = ['is_active', 'created_at', 'voice_id']
+    list_display = ['name', 'temperature', 'voice_name', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at', 'voice_name']
     search_fields = ['name', 'system_prompt']
     readonly_fields = ['id', 'created_at', 'updated_at']
     fieldsets = (
@@ -13,7 +13,7 @@ class ConversationalBotAdmin(admin.ModelAdmin):
             'fields': ('name', 'system_prompt', 'is_active')
         }),
         ('AI Configuration', {
-            'fields': ('temperature', 'voice_id')
+            'fields': ('temperature', 'voice_name')
         }),
         ('Metadata', {
             'fields': ('id', 'created_at', 'updated_at'),
@@ -47,8 +47,8 @@ class MessageAdmin(admin.ModelAdmin):
     has_audio.short_description = 'Audio'
 
 
-@admin.register(ElevenLabsUsage)
-class ElevenLabsUsageAdmin(admin.ModelAdmin):
+@admin.register(GoogleCloudTTSUsage)
+class GoogleCloudTTSUsageAdmin(admin.ModelAdmin):
     list_display = ['month', 'characters_used', 'characters_limit', 'usage_percentage', 'last_updated']
     readonly_fields = ['id', 'last_updated', 'usage_percentage']
 

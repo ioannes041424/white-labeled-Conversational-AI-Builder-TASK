@@ -4,7 +4,7 @@ python-dotenv==1.0.0
 
 # AI APIs
 azure-ai-inference==1.0.0b4
-elevenlabs==0.2.26
+google-cloud-texttospeech==2.27.0
 requests==2.31.0
 
 # Image processing

@@ -10,8 +10,8 @@ class ConversationalBot(models.Model):
     name = models.CharField(max_length=200)
     system_prompt = models.TextField(help_text="System prompt that defines the bot's behavior")
     temperature = models.FloatField(default=0.7, help_text="AI response creativity (0.0-1.0)")
-    voice_id = models.CharField(max_length=100, default="21m00Tcm4TlvDq8ikWAM",
-                               help_text="ElevenLabs voice ID")
+    voice_name = models.CharField(max_length=100, default="en-US-Chirp3-HD-Achernar",
+                                 help_text="Google Cloud Text-to-Speech Chirp3-HD voice name")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
@@ -22,10 +22,10 @@ class ConversationalBot(models.Model):
     def __str__(self):
         return self.name
 
-    def get_voice_name(self):
+    def get_voice_display_name(self):
         """Get the human-readable name for the selected voice"""
         from .services import VoiceSelectionService
-        return VoiceSelectionService.get_voice_name(self.voice_id)
+        return VoiceSelectionService.get_voice_name(self.voice_name)
 
 
 class Conversation(models.Model):
@@ -65,12 +65,12 @@ class Message(models.Model):
         return f"{self.message_type}: {self.content[:50]}..."
 
 
-class ElevenLabsUsage(models.Model):
-    """Model to track ElevenLabs API usage for credit management"""
+class GoogleCloudTTSUsage(models.Model):
+    """Model to track Google Cloud Text-to-Speech API usage for credit management"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     month = models.DateField(help_text="Month for which usage is tracked")
     characters_used = models.IntegerField(default=0)
-    characters_limit = models.IntegerField(default=10000)  # Free tier limit
+    characters_limit = models.IntegerField(default=10000)  # Warning limit for usage tracking
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:

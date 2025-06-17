@@ -1,14 +1,12 @@
-import os
 import json
 import requests
 from datetime import datetime, date
 from django.conf import settings
 from django.core.files.base import ContentFile
-import elevenlabs
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
-from .models import ElevenLabsUsage, Message
+from .models import GoogleCloudTTSUsage, Message
 import logging
 import re
 
@@ -18,10 +16,24 @@ logger = logging.getLogger(__name__)
 def markdown_to_clean_text(text):
     """
     Convert markdown text to clean, readable text for voice synthesis
-    Removes all markdown formatting while preserving the actual content
+    Removes all markdown formatting, emojis, and special characters while preserving the actual content
     """
     if not text:
         return ""
+
+    # Remove emojis and other Unicode symbols that shouldn't be read aloud
+    # This regex removes most emoji ranges and symbols
+    text = re.sub(r'[\U0001F600-\U0001F64F]', '', text)  # Emoticons
+    text = re.sub(r'[\U0001F300-\U0001F5FF]', '', text)  # Symbols & pictographs
+    text = re.sub(r'[\U0001F680-\U0001F6FF]', '', text)  # Transport & map symbols
+    text = re.sub(r'[\U0001F1E0-\U0001F1FF]', '', text)  # Flags (iOS)
+    text = re.sub(r'[\U00002702-\U000027B0]', '', text)  # Dingbats
+    text = re.sub(r'[\U000024C2-\U0001F251]', '', text)  # Enclosed characters
+    text = re.sub(r'[\U0001F900-\U0001F9FF]', '', text)  # Supplemental Symbols and Pictographs
+    text = re.sub(r'[\U0001FA70-\U0001FAFF]', '', text)  # Symbols and Pictographs Extended-A
+
+    # Remove common emoji-like characters
+    text = re.sub(r'[😀-🙏🌀-🗿🚀-🛿🇀-🇿♀-♿⚀-⚿✀-➿]', '', text)
 
     # Remove code blocks first (```code```)
     text = re.sub(r'```[\s\S]*?```', '', text)
@@ -67,179 +79,296 @@ def markdown_to_clean_text(text):
     # Clean up any remaining formatting artifacts
     text = re.sub(r'[*_`#>]', '', text)
 
+    # Remove any remaining special characters that might be read as symbols
+    text = re.sub(r'[^\w\s\.,!?;:\'"()-]', '', text)
+
     return text.strip()
 
 
 class VoiceSelectionService:
-    """Service for intelligently selecting ElevenLabs voices based on bot characteristics"""
+    """Service for intelligently selecting Google Cloud Text-to-Speech voices based on bot characteristics"""
 
-    # Available ElevenLabs voices with their characteristics
+    # Available Google Cloud Text-to-Speech voices with their characteristics
+    # Using natural Chirp3-HD voices for the most human-like speech (12 total)
     VOICE_PROFILES = {
-        '21m00Tcm4TlvDq8ikWAM': {  # Rachel
-            'name': 'Rachel',
+        # Chirp3-HD Voices - Most natural and human-like (all available English voices)
+        'en-US-Chirp3-HD-Achernar': {  # Female, friendly and warm
+            'name': 'Achernar',
             'gender': 'female',
             'age': 'young_adult',
             'tone': 'friendly',
             'accent': 'american',
-            'personality': ['helpful', 'professional', 'warm', 'customer_service']
+            'personality': ['helpful', 'professional', 'warm', 'customer_service', 'natural']
         },
-        'AZnzlk1XvdvUeBnXmlld': {  # Domi
-            'name': 'Domi',
+        'en-US-Chirp3-HD-Aoede': {  # Female, melodic and artistic
+            'name': 'Aoede',
             'gender': 'female',
             'age': 'young_adult',
-            'tone': 'confident',
+            'tone': 'melodic',
             'accent': 'american',
-            'personality': ['assertive', 'modern', 'tech_savvy']
+            'personality': ['creative', 'artistic', 'expressive', 'musical', 'natural']
         },
-        'EXAVITQu4vr4xnSDxMaL': {  # Bella
-            'name': 'Bella',
-            'gender': 'female',
+        'en-US-Chirp3-HD-Puck': {  # Male, playful and energetic
+            'name': 'Puck',
+            'gender': 'male',
             'age': 'young_adult',
-            'tone': 'gentle',
+            'tone': 'playful',
             'accent': 'american',
-            'personality': ['caring', 'empathetic', 'therapeutic', 'calm']
+            'personality': ['energetic', 'fun', 'creative', 'youthful', 'natural']
         },
-        'ErXwobaYiN019PkySvjV': {  # Antoni
-            'name': 'Antoni',
+        'en-US-Chirp3-HD-Charon': {  # Male, deep and authoritative
+            'name': 'Charon',
             'gender': 'male',
             'age': 'adult',
-            'tone': 'authoritative',
-            'accent': 'american',
-            'personality': ['professional', 'business', 'serious', 'executive']
-        },
-        'MF3mGyEYCl7XYWbV9V6O': {  # Elli
-            'name': 'Elli',
-            'gender': 'female',
-            'age': 'young_adult',
-            'tone': 'energetic',
-            'accent': 'american',
-            'personality': ['enthusiastic', 'creative', 'artistic', 'upbeat']
-        },
-        'TxGEqnHWrfWFTfGW9XjX': {  # Josh
-            'name': 'Josh',
-            'gender': 'male',
-            'age': 'young_adult',
-            'tone': 'casual',
-            'accent': 'american',
-            'personality': ['friendly', 'approachable', 'tech_support', 'informal']
-        },
-        'VR6AewLTigWG4xSOukaG': {  # Arnold
-            'name': 'Arnold',
-            'gender': 'male',
-            'age': 'mature',
             'tone': 'deep',
             'accent': 'american',
-            'personality': ['wise', 'mentor', 'experienced', 'authoritative']
+            'personality': ['authoritative', 'serious', 'professional', 'mature', 'natural']
         },
-        'pNInz6obpgDQGcFmaJgB': {  # Adam
-            'name': 'Adam',
+        'en-US-Chirp3-HD-Kore': {  # Female, gentle and caring
+            'name': 'Kore',
+            'gender': 'female',
+            'age': 'adult',
+            'tone': 'gentle',
+            'accent': 'american',
+            'personality': ['caring', 'nurturing', 'supportive', 'healthcare', 'natural']
+        },
+        'en-US-Chirp3-HD-Fenrir': {  # Male, strong and confident
+            'name': 'Fenrir',
             'gender': 'male',
             'age': 'adult',
-            'tone': 'neutral',
+            'tone': 'confident',
             'accent': 'american',
-            'personality': ['balanced', 'versatile', 'professional', 'clear']
+            'personality': ['strong', 'confident', 'leadership', 'powerful', 'natural']
         },
-        'yoZ06aMxZJJ28mfd3POQ': {  # Sam
-            'name': 'Sam',
+        'en-US-Chirp3-HD-Leda': {  # Female, elegant and sophisticated
+            'name': 'Leda',
+            'gender': 'female',
+            'age': 'adult',
+            'tone': 'elegant',
+            'accent': 'american',
+            'personality': ['sophisticated', 'refined', 'professional', 'polished', 'natural']
+        },
+        'en-US-Chirp3-HD-Orus': {  # Male, warm and approachable
+            'name': 'Orus',
             'gender': 'male',
-            'age': 'young_adult',
+            'age': 'adult',
             'tone': 'warm',
             'accent': 'american',
-            'personality': ['friendly', 'helpful', 'supportive', 'guidance']
-        }
+            'personality': ['warm', 'approachable', 'friendly', 'supportive', 'natural']
+        },
+        'en-US-Chirp3-HD-Zephyr': {  # Female, light and breezy
+            'name': 'Zephyr',
+            'gender': 'female',
+            'age': 'young_adult',
+            'tone': 'light',
+            'accent': 'american',
+            'personality': ['cheerful', 'upbeat', 'optimistic', 'fresh', 'natural']
+        },
+
+        # Additional Chirp3-HD voices for more variety
+        'en-US-Chirp3-HD-Achird': {  # Male, technical and precise
+            'name': 'Achird',
+            'gender': 'male',
+            'age': 'adult',
+            'tone': 'precise',
+            'accent': 'american',
+            'personality': ['technical', 'analytical', 'clear', 'informative', 'natural']
+        },
+        'en-US-Chirp3-HD-Autonoe': {  # Female, intelligent and articulate
+            'name': 'Autonoe',
+            'gender': 'female',
+            'age': 'adult',
+            'tone': 'articulate',
+            'accent': 'american',
+            'personality': ['intelligent', 'educational', 'clear', 'professional', 'natural']
+        },
+        'en-US-Chirp3-HD-Callirrhoe': {  # Female, flowing and expressive
+            'name': 'Callirrhoe',
+            'gender': 'female',
+            'age': 'young_adult',
+            'tone': 'expressive',
+            'accent': 'american',
+            'personality': ['expressive', 'dynamic', 'engaging', 'storytelling', 'natural']
+        },
+
+
     }
 
     @classmethod
     def select_voice_for_bot(cls, bot_name, system_prompt):
         """
-        Intelligently select the best voice based on bot name and system prompt
+        Intelligently select the best premium voice based on bot name and system prompt
+        Uses advanced scoring algorithm optimized for Studio and Wavenet voices
 
         Args:
             bot_name (str): Name of the bot
             system_prompt (str): System prompt describing bot behavior
 
         Returns:
-            str: ElevenLabs voice ID
+            str: Google Cloud Text-to-Speech voice name
         """
         # Combine bot name and system prompt for analysis
         text_to_analyze = f"{bot_name} {system_prompt}".lower()
-
-        # Score each voice based on keyword matching
         voice_scores = {}
 
         for voice_id, profile in cls.VOICE_PROFILES.items():
             score = 0
 
-            # Check for gender preferences in text
-            if 'female' in text_to_analyze or 'woman' in text_to_analyze or 'girl' in text_to_analyze:
-                if profile['gender'] == 'female':
-                    score += 3
-            elif 'male' in text_to_analyze or 'man' in text_to_analyze or 'boy' in text_to_analyze:
-                if profile['gender'] == 'male':
-                    score += 3
+            # Premium voice bonus (Studio voices get higher priority)
+            if 'Studio' in voice_id:
+                score += 5  # Studio voices are premium
+            elif 'Wavenet' in voice_id:
+                score += 3  # Wavenet voices are high-quality
 
-            # Check for personality keywords
-            personality_keywords = {
-                'professional': ['professional', 'business', 'corporate', 'formal', 'executive'],
-                'friendly': ['friendly', 'warm', 'welcoming', 'approachable', 'kind'],
-                'helpful': ['helpful', 'assistant', 'support', 'service', 'guide'],
-                'authoritative': ['expert', 'authority', 'leader', 'boss', 'manager', 'serious'],
-                'calm': ['calm', 'peaceful', 'relaxing', 'therapeutic', 'meditation'],
-                'energetic': ['energetic', 'enthusiastic', 'excited', 'upbeat', 'dynamic'],
-                'tech_savvy': ['tech', 'technology', 'computer', 'software', 'digital', 'ai'],
-                'creative': ['creative', 'artistic', 'design', 'innovative', 'imaginative'],
-                'caring': ['caring', 'empathetic', 'compassionate', 'understanding', 'therapy'],
-                'wise': ['wise', 'mentor', 'teacher', 'experienced', 'advisor', 'guru']
+            # Enhanced gender detection with more keywords
+            gender_keywords = {
+                'female': ['female', 'woman', 'girl', 'lady', 'she', 'her', 'maya', 'sophia', 'emma', 'alice', 'bella', 'luna'],
+                'male': ['male', 'man', 'boy', 'guy', 'he', 'him', 'alex', 'john', 'mike', 'david', 'max', 'sam', 'coach']
             }
 
-            for trait in profile['personality']:
-                if trait in personality_keywords:
-                    for keyword in personality_keywords[trait]:
-                        if keyword in text_to_analyze:
-                            score += 2
+            for gender, keywords in gender_keywords.items():
+                if any(keyword in text_to_analyze for keyword in keywords):
+                    if profile['gender'] == gender:
+                        score += 8  # Strong gender match bonus
 
-            # Check for specific use cases
-            use_case_keywords = {
-                'customer_service': ['customer', 'support', 'service', 'help', 'assistance'],
-                'education': ['teach', 'learn', 'education', 'tutor', 'instructor'],
-                'healthcare': ['health', 'medical', 'doctor', 'nurse', 'therapy'],
-                'business': ['business', 'sales', 'marketing', 'corporate'],
-                'entertainment': ['fun', 'game', 'entertainment', 'joke', 'story'],
-                'technical': ['technical', 'engineering', 'developer', 'programmer']
+            # Advanced personality and tone matching
+            personality_scoring = {
+                # High-priority matches (perfect fit)
+                'authoritative': {
+                    'keywords': ['expert', 'authority', 'leader', 'boss', 'manager', 'serious', 'professional', 'business', 'executive', 'advisor'],
+                    'bonus': 10
+                },
+                'friendly': {
+                    'keywords': ['friendly', 'warm', 'welcoming', 'approachable', 'kind', 'helpful', 'support', 'customer'],
+                    'bonus': 8
+                },
+                'confident': {
+                    'keywords': ['confident', 'assertive', 'modern', 'tech', 'technology', 'ai', 'smart', 'innovative'],
+                    'bonus': 8
+                },
+                'gentle': {
+                    'keywords': ['gentle', 'calm', 'peaceful', 'therapeutic', 'therapy', 'caring', 'empathetic', 'meditation', 'health'],
+                    'bonus': 10
+                },
+                'energetic': {
+                    'keywords': ['energetic', 'enthusiastic', 'excited', 'upbeat', 'dynamic', 'fitness', 'coach', 'motivate'],
+                    'bonus': 10
+                },
+                'professional': {
+                    'keywords': ['professional', 'business', 'corporate', 'formal', 'reliable', 'trustworthy'],
+                    'bonus': 7
+                },
+                'casual': {
+                    'keywords': ['casual', 'informal', 'friend', 'buddy', 'chat', 'conversation', 'relaxed'],
+                    'bonus': 6
+                },
+                'deep': {
+                    'keywords': ['wise', 'mentor', 'teacher', 'experienced', 'guru', 'guide', 'elder', 'master'],
+                    'bonus': 9
+                },
+                'neutral': {
+                    'keywords': ['neutral', 'balanced', 'versatile', 'general', 'standard', 'clear'],
+                    'bonus': 4
+                },
+                'warm': {
+                    'keywords': ['warm', 'supportive', 'guidance', 'help', 'assist', 'companion'],
+                    'bonus': 7
+                }
             }
 
-            for use_case, keywords in use_case_keywords.items():
-                for keyword in keywords:
-                    if keyword in text_to_analyze:
-                        # Match voices to use cases
-                        if use_case == 'customer_service' and 'customer_service' in profile['personality']:
-                            score += 3
-                        elif use_case == 'business' and 'business' in profile['personality']:
-                            score += 3
-                        elif use_case == 'healthcare' and 'caring' in profile['personality']:
-                            score += 3
-                        elif use_case == 'technical' and 'tech_savvy' in profile['personality']:
-                            score += 3
+            # Score based on tone and personality matches
+            bot_tone = profile.get('tone', '')
+            for tone, config in personality_scoring.items():
+                if tone == bot_tone:
+                    # Check if any keywords match
+                    keyword_matches = sum(1 for keyword in config['keywords'] if keyword in text_to_analyze)
+                    if keyword_matches > 0:
+                        score += config['bonus'] + (keyword_matches * 2)
 
-            # Check bot name for gender hints
-            female_names = ['alice', 'emma', 'sophia', 'olivia', 'ava', 'isabella', 'mia', 'luna', 'aria', 'eva']
-            male_names = ['alex', 'john', 'mike', 'david', 'james', 'robert', 'william', 'richard', 'thomas', 'max']
+            # Enhanced use case matching with Chirp3-HD voices only
+            use_case_mapping = {
+                'customer_service': {
+                    'keywords': ['customer', 'support', 'service', 'help', 'assistance', 'helpdesk'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
+                    'bonus': 15
+                },
+                'business': {
+                    'keywords': ['business', 'sales', 'marketing', 'corporate', 'executive', 'professional'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Leda'],
+                    'bonus': 12
+                },
+                'education': {
+                    'keywords': ['teach', 'learn', 'education', 'tutor', 'instructor', 'study', 'academic'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Autonoe', 'en-US-Chirp3-HD-Orus'],
+                    'bonus': 12
+                },
+                'healthcare': {
+                    'keywords': ['health', 'medical', 'doctor', 'nurse', 'therapy', 'wellness', 'care'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Kore', 'en-US-Chirp3-HD-Achernar'],
+                    'bonus': 15
+                },
+                'technology': {
+                    'keywords': ['tech', 'technology', 'ai', 'software', 'digital', 'computer', 'programming'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Achird', 'en-US-Chirp3-HD-Autonoe'],
+                    'bonus': 12
+                },
+                'creative': {
+                    'keywords': ['creative', 'artistic', 'design', 'writing', 'content', 'innovative'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Aoede', 'en-US-Chirp3-HD-Callirrhoe'],
+                    'bonus': 12
+                },
+                'fitness': {
+                    'keywords': ['fitness', 'coach', 'workout', 'exercise', 'health', 'training'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Fenrir'],
+                    'bonus': 12
+                },
+                'entertainment': {
+                    'keywords': ['fun', 'entertainment', 'game', 'story', 'adventure', 'playful'],
+                    'preferred_voices': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Zephyr', 'en-US-Chirp3-HD-Callirrhoe'],
+                    'bonus': 12
+                }
+            }
 
-            bot_name_lower = bot_name.lower()
-            for name in female_names:
-                if name in bot_name_lower and profile['gender'] == 'female':
-                    score += 2
-            for name in male_names:
-                if name in bot_name_lower and profile['gender'] == 'male':
-                    score += 2
+            # Apply use case bonuses
+            for use_case, config in use_case_mapping.items():
+                if any(keyword in text_to_analyze for keyword in config['keywords']):
+                    if voice_id in config['preferred_voices']:
+                        score += config['bonus']
+
+            # Bot name analysis for better matching with Chirp3-HD voices only
+            name_patterns = {
+                'coach': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Fenrir'],
+                'assistant': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
+                'advisor': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Leda'],
+                'buddy': ['en-US-Chirp3-HD-Puck', 'en-US-Chirp3-HD-Orus'],
+                'expert': ['en-US-Chirp3-HD-Achird', 'en-US-Chirp3-HD-Autonoe'],
+                'support': ['en-US-Chirp3-HD-Achernar', 'en-US-Chirp3-HD-Kore'],
+                'wise': ['en-US-Chirp3-HD-Charon', 'en-US-Chirp3-HD-Orus'],
+                'creative': ['en-US-Chirp3-HD-Aoede', 'en-US-Chirp3-HD-Callirrhoe'],
+                'teacher': ['en-US-Chirp3-HD-Autonoe', 'en-US-Chirp3-HD-Orus']
+            }
+
+            for pattern, preferred_voices in name_patterns.items():
+                if pattern in bot_name.lower() and voice_id in preferred_voices:
+                    score += 8
 
             voice_scores[voice_id] = score
 
-        # Select the voice with the highest score
+        # Select the voice with the highest score, with fallback logic
+        if not voice_scores:
+            return 'en-US-Studio-O'  # Default fallback
+
+        # Ensure we have at least one voice scored
+        if not voice_scores:
+            logger.warning("No voice scores calculated, using default Chirp3-HD-Achernar voice")
+            return "en-US-Chirp3-HD-Achernar"
+
         best_voice = max(voice_scores.items(), key=lambda x: x[1])
         selected_voice_id = best_voice[0]
+        selected_voice_name = cls.VOICE_PROFILES[selected_voice_id]['name']
 
-        logger.info(f"Voice selection for '{bot_name}': {cls.VOICE_PROFILES[selected_voice_id]['name']} (score: {best_voice[1]})")
+        logger.info(f"🎤 Voice selection for bot '{bot_name}': {selected_voice_name} (score: {best_voice[1]})")
+        logger.info(f"Voice analysis: '{text_to_analyze[:100]}...'")
 
         return selected_voice_id
 
@@ -322,20 +451,32 @@ class GPTService:
         return messages
 
 
-class ElevenLabsService:
-    """Service for handling ElevenLabs text-to-speech API"""
+class GoogleCloudTTSService:
+    """Service for handling Google Cloud Text-to-Speech API with API key authentication"""
 
     def __init__(self):
-        if settings.ELEVENLABS_API_KEY:
-            elevenlabs.set_api_key(settings.ELEVENLABS_API_KEY)
-
-    def text_to_speech(self, text, voice_id="21m00Tcm4TlvDq8ikWAM"):
-        """Convert text to speech using ElevenLabs API"""
         try:
-            if not settings.ELEVENLABS_API_KEY:
-                logger.warning("ElevenLabs API key not configured")
-                return None
+            # Use API key authentication (simple and unlimited)
+            if hasattr(settings, 'GOOGLE_CLOUD_API_KEY') and settings.GOOGLE_CLOUD_API_KEY:
+                # Store API key for authentication
+                self.api_key = settings.GOOGLE_CLOUD_API_KEY
+                self.client = None  # We'll use REST API instead of client library
 
+                logger.info(f"Google Cloud Text-to-Speech service initialized with API key: {self.api_key[:20]}...")
+
+            else:
+                logger.error("No Google Cloud API key found in settings")
+                self.client = None
+                self.api_key = None
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Google Cloud TTS service: {str(e)}")
+            self.client = None
+            self.api_key = None
+
+    def text_to_speech(self, text, voice_name="en-US-Chirp3-HD-Achernar"):
+        """Convert text to speech using Google Cloud Text-to-Speech API"""
+        try:
             # Clean the text by removing markdown formatting
             clean_text = markdown_to_clean_text(text)
 
@@ -343,33 +484,68 @@ class ElevenLabsService:
                 logger.warning("No readable text after markdown cleanup")
                 return None
 
-            # Check if we have enough credits (use clean text length for accurate tracking)
-            if not self._check_credits(len(clean_text)):
-                logger.warning("ElevenLabs credits exhausted")
-                return None
+            # Note: API is now unlimited, no usage limit checks needed
+            logger.info(f"Processing {len(clean_text)} characters for TTS (unlimited API)")
 
             logger.info(f"Converting to speech: '{clean_text[:100]}...' (cleaned from markdown)")
+            logger.info(f"Using voice: {voice_name}")
 
-            # Generate audio using the cleaned text
-            audio_bytes = elevenlabs.generate(
-                text=clean_text,
-                voice=voice_id,
-                model="eleven_monolingual_v1"
-            )
-
-            # Update usage tracking (use clean text length for accurate tracking)
-            self._update_usage(len(clean_text))
-
-            return audio_bytes
+            # Use REST API with API key (most reliable method)
+            if self.api_key:
+                return self._synthesize_with_rest_api(clean_text, voice_name)
+            else:
+                logger.error("No Google Cloud API key available")
+                return None
 
         except Exception as e:
-            logger.error(f"ElevenLabs API error: {str(e)}")
+            logger.error(f"Google Cloud TTS API error: {str(e)}")
+            return None
+
+
+
+    def _synthesize_with_rest_api(self, text, voice_name):
+        """Synthesize speech using direct REST API calls with API key"""
+        import requests
+        import json
+
+        url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={self.api_key}"
+
+        payload = {
+            "input": {"text": text},
+            "voice": {
+                "languageCode": "en-US",
+                "name": voice_name
+            },
+            "audioConfig": {
+                "audioEncoding": "MP3"
+            }
+        }
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+
+        if response.status_code == 200:
+            result = response.json()
+            if 'audioContent' in result:
+                import base64
+                audio_content = base64.b64decode(result['audioContent'])
+
+                logger.info("✅ Speech synthesis successful using REST API")
+                return audio_content
+            else:
+                logger.error("No audio content in REST API response")
+                return None
+        else:
+            logger.error(f"REST API request failed: {response.status_code} - {response.text}")
             return None
     
     def _check_credits(self, character_count):
-        """Check if we have enough ElevenLabs credits"""
+        """Check if we have enough Google Cloud TTS credits"""
         current_month = date.today().replace(day=1)
-        usage, _ = ElevenLabsUsage.objects.get_or_create(
+        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
             month=current_month,
             defaults={'characters_used': 0, 'characters_limit': 10000}
         )
@@ -377,9 +553,9 @@ class ElevenLabsService:
         return (usage.characters_used + character_count) <= usage.characters_limit
 
     def _update_usage(self, character_count):
-        """Update ElevenLabs usage tracking"""
+        """Update Google Cloud TTS usage tracking"""
         current_month = date.today().replace(day=1)
-        usage, _ = ElevenLabsUsage.objects.get_or_create(
+        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
             month=current_month,
             defaults={'characters_used': 0, 'characters_limit': 10000}
         )
@@ -390,7 +566,7 @@ class ElevenLabsService:
     def get_current_usage(self):
         """Get current month's usage statistics"""
         current_month = date.today().replace(day=1)
-        usage, _ = ElevenLabsUsage.objects.get_or_create(
+        usage, _ = GoogleCloudTTSUsage.objects.get_or_create(
             month=current_month,
             defaults={'characters_used': 0, 'characters_limit': 10000}
         )
@@ -402,10 +578,10 @@ class ConversationManager:
     
     def __init__(self):
         self.gpt_service = GPTService()
-        self.tts_service = ElevenLabsService()
+        self.tts_service = GoogleCloudTTSService()
     
     def process_user_message(self, conversation, user_message_text):
-        """Process a user message and generate AI response with optional audio"""
+        """Process a user message and generate AI response with mandatory audio"""
         try:
             # Save user message
             user_message = Message.objects.create(
@@ -413,39 +589,58 @@ class ConversationManager:
                 message_type='user',
                 content=user_message_text
             )
-            
+
             # Generate AI response
             ai_response_text = self.gpt_service.generate_response(
                 conversation, user_message_text, conversation.bot
             )
-            
+
             # Create AI message
             ai_message = Message.objects.create(
                 conversation=conversation,
                 message_type='ai',
                 content=ai_response_text
             )
-            
-            # Generate audio if possible
-            audio_data = self.tts_service.text_to_speech(
-                ai_response_text, conversation.bot.voice_id
-            )
-            
-            if audio_data:
-                # Save audio file
-                audio_filename = f"response_{ai_message.id}.mp3"
-                ai_message.audio_file.save(
-                    audio_filename,
-                    ContentFile(audio_data),
-                    save=True
+
+            # ALWAYS generate audio for AI responses - this is mandatory
+            audio_data = None
+            audio_error = None
+
+            try:
+                logger.info(f"Generating voice response for bot '{conversation.bot.name}' using voice '{conversation.bot.voice_name}'")
+                audio_data = self.tts_service.text_to_speech(
+                    ai_response_text, conversation.bot.voice_name
                 )
-            
+
+                if audio_data:
+                    # Save audio file
+                    audio_filename = f"response_{ai_message.id}.mp3"
+                    ai_message.audio_file.save(
+                        audio_filename,
+                        ContentFile(audio_data),
+                        save=True
+                    )
+                    logger.info(f"Voice response generated successfully for message {ai_message.id}")
+                else:
+                    audio_error = "TTS service returned no audio data"
+                    logger.warning(f"Failed to generate voice response: {audio_error}")
+
+            except Exception as audio_exception:
+                audio_error = str(audio_exception)
+                logger.error(f"Error generating voice response: {audio_error}")
+
+            # Log audio generation status
+            if not audio_data:
+                logger.warning(f"AI response will be sent without voice audio. Error: {audio_error}")
+
             return {
                 'user_message': user_message,
                 'ai_message': ai_message,
+                'audio_generated': audio_data is not None,
+                'audio_error': audio_error,
                 'success': True
             }
-            
+
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
             return {
@@ -454,5 +649,5 @@ class ConversationManager:
             }
     
     def get_usage_info(self):
-        """Get current ElevenLabs usage information"""
+        """Get current Google Cloud TTS usage information"""
         return self.tts_service.get_current_usage()

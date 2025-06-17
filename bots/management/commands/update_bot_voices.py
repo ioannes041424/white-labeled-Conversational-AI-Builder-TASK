@@ -11,14 +11,14 @@ class Command(BaseCommand):
         updated_count = 0
         
         for bot in bots:
-            old_voice = bot.voice_id
+            old_voice = bot.voice_name
             new_voice = VoiceSelectionService.select_voice_for_bot(
-                bot.name, 
+                bot.name,
                 bot.system_prompt
             )
-            
+
             if old_voice != new_voice:
-                bot.voice_id = new_voice
+                bot.voice_name = new_voice
                 bot.save()
                 
                 old_name = VoiceSelectionService.get_voice_name(old_voice) if old_voice else 'None'
