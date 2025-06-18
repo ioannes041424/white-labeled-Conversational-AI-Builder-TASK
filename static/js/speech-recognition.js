@@ -19,9 +19,9 @@ class SpeechRecognitionService {
 
         // Auto-send functionality - optimized for faster, more responsive auto-send
         this.silenceTimer = null;
-        this.silenceThreshold = 500; // 1.5 seconds of silence before auto-send
+        this.silenceThreshold = 300; // .3 seconds of silence before auto-send
         this.speechEndTimer = null;
-        this.speechEndThreshold = 200; // 0.8 seconds after speech ends
+        this.speechEndThreshold = 50; // 0.8 seconds after speech ends
         this.lastSpeechTime = null;
         this.lastResultTime = null;
         this.hasReceivedFinalSpeech = false;
@@ -29,7 +29,7 @@ class SpeechRecognitionService {
         this.minConfidence = 0.7; // Lower confidence threshold for better responsiveness
         this.confidenceSum = 0;
         this.confidenceCount = 0;
-        this.minInterimConfidence = 0.6; // Lower interim confidence for faster updates
+        this.minInterimConfidence = 0.4; // Lower interim confidence for faster updates
         
         // Voice activity detection
         this.speechStarted = false;

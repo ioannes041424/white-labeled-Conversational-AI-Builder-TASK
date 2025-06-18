@@ -324,8 +324,11 @@ class GPTService:
     
     def _build_conversation_context(self, conversation, user_message, bot):
         """Build conversation context for GitHub Models API"""
+        # Create enhanced system prompt that includes the bot's name
+        enhanced_system_prompt = f"Your name is {bot.name}. Your system prompt is: {bot.system_prompt}"
+
         messages = [
-            SystemMessage(content=bot.system_prompt)
+            SystemMessage(content=enhanced_system_prompt)
         ]
 
         # Add recent conversation history (last 5 messages for context to avoid token limits)
