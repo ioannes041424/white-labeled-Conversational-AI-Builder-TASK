@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Disable form
         setFormState(false);
-        
+
         // Clear input
         messageInput.value = '';
 
@@ -100,6 +100,9 @@ document.addEventListener('DOMContentLoaded', function() {
             messageInput.focus();
         });
     }
+
+    // Expose sendMessage globally for speech recognition auto-send
+    window.chatSendMessage = sendMessage;
 
     // Add message to UI
     function addMessageToUI(type, content, audioUrl = null) {

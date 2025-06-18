@@ -1,0 +1,72 @@
+/* Monochrome Elegance Color Scheme */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Raleway:wght@300;400;500;600&display=swap');
+
+:root {
+    /* Base Colors */
+    --color-white: #FFFFFF;
+    --color-black: #000000;
+    --color-light-gray: #B0B0B0;
+    --color-medium-gray: #7D7D7D;
+    --color-dark-gray: #4D4D4D;
+    
+    /* Typography */
+    --font-heading: 'Playfair Display', serif;
+    --font-body: 'Raleway', sans-serif;
+    --font-monospace: 'Courier New', monospace;
+    
+    /* Functional Colors */
+    --color-primary: var(--color-black);
+    --color-secondary: var(--color-medium-gray);
+    --color-success: var(--color-dark-gray);
+    --color-danger: var(--color-black);
+    --color-warning: var(--color-light-gray);
+    --color-info: var(--color-medium-gray);
+    --color-light: var(--color-white);
+    --color-dark: var(--color-black);
+    
+    /* Background Colors */
+    --bg-primary: var(--color-black);
+    --bg-secondary: var(--color-medium-gray);
+    --bg-light: var(--color-white);
+    --bg-dark: var(--color-black);
+    --bg-body: #f8f9fa;
+    
+    /* Text Colors */
+    --text-primary: var(--color-black);
+    --text-secondary: var(--color-medium-gray);
+    --text-light: var(--color-white);
+    --text-dark: var(--color-black);
+    --text-muted: var(--color-medium-gray);
+    
+    /* Border Colors */
+    --border-color: var(--color-light-gray);
+    
+    /* Shadow Colors */
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --shadow-color-darker: rgba(0, 0, 0, 0.2);
+    
+    /* Component-specific Colors */
+    --navbar-bg: var(--color-black);
+    --card-bg: var(--color-white);
+    --card-border: var(--color-light-gray);
+    --input-border: var(--color-light-gray);
+    --input-focus-border: var(--color-medium-gray);
+    --btn-primary-bg: var(--color-black);
+    --btn-primary-border: var(--color-black);
+    --btn-primary-hover-bg: var(--color-dark-gray);
+    --btn-secondary-bg: var(--color-medium-gray);
+    --btn-secondary-border: var(--color-medium-gray);
+    
+    /* Message Colors */
+    --user-message-bg: var(--color-black);
+    --user-message-text: var(--color-white);
+    --ai-message-bg: var(--color-white);
+    --ai-message-text: var(--color-black);
+    --ai-message-border: var(--color-light-gray);
+    
+    /* UI Element Colors */
+    --scrollbar-track: #f1f1f1;
+    --scrollbar-thumb: var(--color-light-gray);
+    --scrollbar-thumb-hover: var(--color-medium-gray);
+}

@@ -5,9 +5,10 @@
     height: 500px;
     overflow-y: auto;
     padding: 1rem;
-    background-color: #f8f9fa;
+    background-color: var(--bg-light);
     border-radius: 0.375rem;
     scroll-behavior: smooth;
+    border: 1px solid var(--border-color);
 }
 
 /* Message Styles */
@@ -34,12 +35,12 @@
 }
 
 .user-message .message-content {
-    background-color: #0d6efd;
-    color: white;
+    background-color: var(--user-message-bg);
+    color: var(--user-message-text);
     border-radius: 1rem 1rem 0.25rem 1rem;
     padding: 0.75rem 1rem;
     max-width: 70%;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--shadow-color);
 }
 
 /* AI Messages */
@@ -48,13 +49,13 @@
 }
 
 .ai-message .message-content {
-    background-color: white;
-    color: #333;
+    background-color: var(--ai-message-bg);
+    color: var(--ai-message-text);
     border-radius: 1rem 1rem 1rem 0.25rem;
     padding: 0.75rem 1rem;
     max-width: 70%;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px var(--shadow-color);
+    border: 1px solid var(--ai-message-border);
 }
 
 /* Message Text */
@@ -135,19 +136,21 @@
 }
 
 .message-text code {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: var(--color-light-gray);
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-monospace);
     font-size: 0.9em;
+    color: var(--text-dark);
 }
 
 .ai-message .message-text code {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--color-light-gray);
 }
 
 .user-message .message-text code {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--color-medium-gray);
+    color: var(--text-light);
 }
 
 .message-text pre {
@@ -186,23 +189,24 @@
 }
 
 .message-text a {
-    color: #0d6efd;
+    color: var(--color-black);
     text-decoration: underline;
+    font-weight: bold;
 }
 
 .user-message .message-text a {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--color-white);
 }
 
 .message-text blockquote {
-    border-left: 3px solid #dee2e6;
+    border-left: 3px solid var(--color-medium-gray);
     padding-left: 1rem;
     margin: 0.5rem 0;
     font-style: italic;
 }
 
 .user-message .message-text blockquote {
-    border-left-color: rgba(255, 255, 255, 0.3);
+    border-left-color: var(--color-light-gray);
 }
 
 /* Message Meta */
@@ -212,11 +216,11 @@
 }
 
 .user-message .message-meta {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--color-white);
 }
 
 .ai-message .message-meta {
-    color: #6c757d;
+    color: var(--color-medium-gray);
 }
 
 /* Audio Button - Enhanced for Voice Responses */
@@ -230,17 +234,21 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    background-color: var(--color-black);
+    color: var(--color-white);
+    border-color: var(--color-black);
 }
 
 .play-audio-btn:hover {
     transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    box-shadow: 0 2px 8px var(--shadow-color-darker);
+    background-color: var(--color-dark-gray);
 }
 
 .play-audio-btn.playing {
-    background-color: #dc3545;
-    border-color: #dc3545;
-    color: white;
+    background-color: var(--color-medium-gray);
+    border-color: var(--color-medium-gray);
+    color: var(--color-white);
     animation: pulse 1.5s infinite;
 }
 
@@ -253,13 +261,13 @@
     position: fixed;
     top: 20px;
     right: 20px;
-    background: rgba(0, 123, 255, 0.9);
-    color: white;
+    background: var(--color-black);
+    color: var(--color-white);
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 12px;
     z-index: 1050;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 10px var(--shadow-color-darker);
     backdrop-filter: blur(10px);
 }
 
@@ -306,13 +314,15 @@
 #message-input {
     border-radius: 1.5rem;
     padding: 0.75rem 1rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     transition: all 0.2s ease;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
 }
 
 #message-input:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 0.2rem var(--shadow-color);
 }
 
 #send-btn {
@@ -323,10 +333,14 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    background-color: var(--btn-primary-bg);
+    border-color: var(--btn-primary-border);
+    color: var(--text-light);
 }
 
 #send-btn:hover {
     transform: scale(1.05);
+    background-color: var(--btn-primary-hover-bg);
 }
 
 #send-btn:disabled {
@@ -350,10 +364,10 @@
     display: flex;
     align-items: center;
     padding: 0.75rem 1rem;
-    background-color: white;
+    background-color: var(--ai-message-bg);
     border-radius: 1rem 1rem 1rem 0.25rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px var(--shadow-color);
+    border: 1px solid var(--ai-message-border);
     max-width: 70%;
     margin-bottom: 1rem;
 }
@@ -366,7 +380,7 @@
 .typing-dots span {
     height: 8px;
     width: 8px;
-    background-color: #6c757d;
+    background-color: var(--color-medium-gray);
     border-radius: 50%;
     display: inline-block;
     margin-right: 4px;
@@ -389,20 +403,22 @@
 
 /* Chat Sidebar */
 .chat-sidebar {
-    background-color: white;
+    background-color: var(--card-bg);
     border-radius: 0.375rem;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    box-shadow: var(--box-shadow);
+    border: 1px solid var(--card-border);
 }
 
 .chat-sidebar .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
 }
 
 /* Usage Progress */
 .usage-progress {
     height: 0.5rem;
-    background-color: #e9ecef;
+    background-color: var(--color-light-gray);
     border-radius: 0.25rem;
     overflow: hidden;
     margin-top: 0.5rem;
@@ -413,9 +429,9 @@
     transition: width 0.3s ease;
 }
 
-.usage-progress-bar.bg-success { background-color: #198754 !important; }
-.usage-progress-bar.bg-warning { background-color: #ffc107 !important; }
-.usage-progress-bar.bg-danger { background-color: #dc3545 !important; }
+.usage-progress-bar.bg-success { background-color: var(--color-dark-gray) !important; }
+.usage-progress-bar.bg-warning { background-color: var(--color-medium-gray) !important; }
+.usage-progress-bar.bg-danger { background-color: var(--color-black) !important; }
 
 /* Audio Modal */
 #audioModal .modal-content {
@@ -472,22 +488,22 @@
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
     .messages-container {
-        background-color: #2d3748;
+        background-color: var(--color-dark-gray);
     }
     
     .ai-message .message-content {
-        background-color: #4a5568;
-        color: #e2e8f0;
-        border-color: #4a5568;
+        background-color: var(--color-medium-gray);
+        color: var(--color-white);
+        border-color: var(--color-medium-gray);
     }
     
     .typing-indicator {
-        background-color: #4a5568;
-        border-color: #4a5568;
+        background-color: var(--color-medium-gray);
+        border-color: var(--color-medium-gray);
     }
     
     .typing-dots span {
-        background-color: #a0aec0;
+        background-color: var(--color-light-gray);
     }
 }
 
@@ -525,18 +541,26 @@
     transition: all 0.3s ease;
     min-width: 45px;
     border-radius: 0 1.5rem 1.5rem 0;
+    background-color: var(--color-medium-gray);
+    border-color: var(--input-border);
+    color: var(--color-white);
 }
 
 #voice-input-btn:hover {
     transform: scale(1.05);
+    background-color: var(--color-dark-gray);
 }
 
 #voice-input-btn.btn-danger {
     animation: recording-pulse 1s infinite;
+    background-color: var(--color-black);
+    border-color: var(--color-black);
 }
 
 #voice-input-btn.btn-warning {
     animation: speaking-glow 0.5s infinite alternate;
+    background-color: var(--color-dark-gray);
+    border-color: var(--color-dark-gray);
 }
 
 @keyframes recording-pulse {

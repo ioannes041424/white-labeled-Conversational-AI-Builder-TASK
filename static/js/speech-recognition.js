@@ -1,9 +1,4 @@
-/**
- * Web Speech API Integration for Conversational AI Builder
- * Provides speech-to-text functionality using browser's native Web Speech API
- * No API keys required - completely free!
- */
-
+// Clean Speech Recognition Service for Django Chat
 class SpeechRecognitionService {
     constructor(inputId = 'message-input', buttonId = 'voice-input-btn') {
         this.recognition = null;
@@ -14,150 +9,151 @@ class SpeechRecognitionService {
         this.inputId = inputId;
         this.buttonId = buttonId;
         this.timeoutId = null;
-        this.maxListeningTime = 30000; // 30 seconds max listening time
-        this.originalText = ''; // Store original text before speech recognition
-        this.finalTranscript = ''; // Store accumulated final results
+        this.maxListeningTime = 30000;
+        
+        // Transcript management
+        this.originalText = '';
+        this.accumulatedTranscript = '';
+        this.lastProcessedIndex = 0;
+        this.currentInterimText = '';
+
+        // Auto-send functionality - optimized for faster, more responsive auto-send
+        this.silenceTimer = null;
+        this.silenceThreshold = 500; // 1.5 seconds of silence before auto-send
+        this.speechEndTimer = null;
+        this.speechEndThreshold = 200; // 0.8 seconds after speech ends
+        this.lastSpeechTime = null;
+        this.lastResultTime = null;
+        this.hasReceivedFinalSpeech = false;
+        this.autoSendEnabled = true;
+        this.minConfidence = 0.7; // Lower confidence threshold for better responsiveness
+        this.confidenceSum = 0;
+        this.confidenceCount = 0;
+        this.minInterimConfidence = 0.6; // Lower interim confidence for faster updates
+        
+        // Voice activity detection
+        this.speechStarted = false;
+        this.speechEnded = false;
+
+        // Debouncing - optimized for faster response
+        this.debouncedUpdateDisplay = this.debounce(this.updateInputDisplay.bind(this), 50);
+        this.debouncedAutoSendDetection = this.debounce(this.startAutoSendDetection.bind(this), 100);
+        this.debouncedSpeechEndDetection = this.debounce(this.startSpeechEndDetection.bind(this), 150);
+        this.throttledResultProcessing = this.throttle(this.processResults.bind(this), 50);
 
         this.init();
     }
 
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    throttle(func, limit) {
+        let inThrottle;
+        return function executedFunction(...args) {
+            if (!inThrottle) {
+                func.apply(this, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+
     init() {
-        // Check browser support
         this.checkSupport();
-
-        // Get DOM elements
-        this.inputElement = document.getElementById(this.inputId);
-        this.voiceButton = document.getElementById(this.buttonId);
-
-        if (this.isSupported && this.voiceButton && this.inputElement) {
+        if (this.isSupported) {
+            this.setupElements();
             this.setupRecognition();
-            this.attachEventListeners();
+            this.setupEventListeners();
         } else {
             this.handleUnsupportedBrowser();
         }
     }
 
     checkSupport() {
-        // Check for Web Speech API support
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
         if (SpeechRecognition) {
             this.isSupported = true;
             this.SpeechRecognition = SpeechRecognition;
+        }
+    }
 
-            // Additional mobile compatibility checks
-            const userAgent = navigator.userAgent.toLowerCase();
-            const isIOS = /iphone|ipad|ipod/.test(userAgent);
-            const isAndroid = /android/.test(userAgent);
-
-            if (isIOS) {
-                console.log('✅ Web Speech API supported on iOS device');
-                // iOS has some limitations with continuous recognition
-            } else if (isAndroid) {
-                console.log('✅ Web Speech API supported on Android device');
-                // Android generally has better speech recognition support
-            } else {
-                console.log('✅ Web Speech API supported on desktop');
-            }
-        } else {
+    setupElements() {
+        this.inputElement = document.getElementById(this.inputId);
+        this.voiceButton = document.getElementById(this.buttonId);
+        
+        if (!this.inputElement || !this.voiceButton) {
             this.isSupported = false;
-            console.warn('❌ Web Speech API not supported in this browser');
         }
     }
 
     setupRecognition() {
         if (!this.isSupported) return;
 
-        // Create recognition instance
         this.recognition = new this.SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'en-US';
+        this.recognition.maxAlternatives = 1;
 
-        // Detect mobile devices for optimized settings
-        this.isMobile = this.detectMobile();
-
-        // Configure recognition settings optimized for mobile compatibility
-        this.recognition.continuous = !this.isMobile;     // Disable continuous on mobile to prevent repetition
-        this.recognition.interimResults = !this.isMobile; // Disable interim results on mobile for stability
-        this.recognition.lang = 'en-US';                  // Default language
-        this.recognition.maxAlternatives = 1;             // Only need best result
-
-        // Mobile-specific optimizations
-        if (this.isMobile) {
-            this.maxListeningTime = 10000; // Shorter timeout for mobile (10 seconds)
-        }
-
-        // Set up event handlers
         this.recognition.onstart = () => this.onStart();
-        this.recognition.onresult = (event) => this.onResult(event);
+        this.recognition.onresult = (event) => this.throttledResultProcessing(event);
         this.recognition.onerror = (event) => this.onError(event);
         this.recognition.onend = () => this.onEnd();
         this.recognition.onspeechstart = () => this.onSpeechStart();
         this.recognition.onspeechend = () => this.onSpeechEnd();
-        this.recognition.onaudiostart = () => this.onAudioStart();
-        this.recognition.onaudioend = () => this.onAudioEnd();
     }
 
-    detectMobile() {
-        // Comprehensive mobile detection
-        const userAgent = navigator.userAgent.toLowerCase();
-        const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        const isSmallScreen = window.innerWidth <= 768;
-
-        const isMobile = isMobileUA || (isTouchDevice && isSmallScreen);
-        console.log(`📱 Device detection: ${isMobile ? 'Mobile' : 'Desktop'} (UA: ${isMobileUA}, Touch: ${isTouchDevice}, Small: ${isSmallScreen})`);
-
-        return isMobile;
+    setupEventListeners() {
+        if (this.voiceButton) {
+            this.voiceButton.addEventListener('click', () => this.toggleListening());
+        }
     }
 
-    attachEventListeners() {
-        if (!this.voiceButton) return;
-
-        this.voiceButton.addEventListener('click', () => {
-            if (this.isListening) {
-                this.stopListening();
-            } else {
-                this.startListening();
-            }
-        });
-
-        // Keyboard shortcut: Ctrl/Cmd + M to start voice input
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-                e.preventDefault();
-                if (!this.isListening) {
-                    this.startListening();
-                }
-            }
-        });
+    toggleListening() {
+        if (this.isListening) {
+            this.stopListening();
+        } else {
+            this.startListening();
+        }
     }
 
     async startListening() {
         if (!this.isSupported || this.isListening) return;
 
         try {
-            console.log('🎤 Starting speech recognition...');
+            await this.requestMicrophonePermission();
 
-            // Request microphone permission explicitly (especially important for mobile)
-            if (this.isMobile) {
-                await this.requestMicrophonePermission();
-            }
-
-            // Store the original text in the input field
             this.originalText = this.inputElement.value;
-            this.finalTranscript = '';
+            this.accumulatedTranscript = '';
+            this.lastProcessedIndex = 0;
+            this.currentInterimText = '';
+            this.hasReceivedFinalSpeech = false;
+            this.lastSpeechTime = null;
+            this.lastResultTime = null;
+            this.confidenceSum = 0;
+            this.confidenceCount = 0;
+            this.speechStarted = false;
+            this.speechEnded = false;
+            this.clearAllTimers();
 
             this.recognition.start();
 
-            // Set timeout to automatically stop after max time
             this.timeoutId = setTimeout(() => {
                 if (this.isListening) {
-                    console.log('⏰ Speech recognition timeout - stopping automatically');
                     this.stopListening();
                 }
             }, this.maxListeningTime);
 
         } catch (error) {
-            console.error('Error starting speech recognition:', error);
             this.showError('Failed to start voice input. Please try again.');
         }
     }
@@ -166,12 +162,9 @@ class SpeechRecognitionService {
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Stop the stream immediately - we just needed permission
                 stream.getTracks().forEach(track => track.stop());
-                console.log('📱 Microphone permission granted');
             }
         } catch (error) {
-            console.warn('📱 Microphone permission request failed:', error);
             throw new Error('Microphone permission required for voice input');
         }
     }
@@ -180,133 +173,287 @@ class SpeechRecognitionService {
         if (!this.isSupported || !this.isListening) return;
 
         try {
-            console.log('🛑 Stopping speech recognition...');
             this.recognition.stop();
-
-            // Clear timeout
-            if (this.timeoutId) {
-                clearTimeout(this.timeoutId);
-                this.timeoutId = null;
-            }
+            this.clearAllTimers();
         } catch (error) {
             console.error('Error stopping speech recognition:', error);
         }
     }
 
-    // Event Handlers
-    onStart() {
-        console.log('🎤 Speech recognition started');
-        this.isListening = true;
-        this.updateButtonState('listening');
-        // Only show initial notification, no ongoing status messages
-    }
-
-    onResult(event) {
-        if (this.isMobile) {
-            // Mobile-optimized result handling - simpler and more reliable
-            this.handleMobileResults(event);
-        } else {
-            // Desktop result handling with interim results
-            this.handleDesktopResults(event);
-        }
-    }
-
-    handleMobileResults(event) {
-        // For mobile: only process final results to prevent repetition
-        let finalTranscript = '';
-
-        for (let i = 0; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-            }
-        }
-
-        if (finalTranscript) {
-            console.log('📱 Mobile final speech result:', finalTranscript);
-
-            // Clean up the transcript (remove extra spaces, trim)
-            finalTranscript = finalTranscript.trim().replace(/\s+/g, ' ');
-
-            // For mobile, replace the entire input content to prevent duplication
-            const existingText = this.originalText.trim();
-            const newText = existingText + (existingText ? ' ' : '') + finalTranscript;
-
-            this.inputElement.value = newText;
-            this.inputElement.focus();
-            this.inputElement.setSelectionRange(this.inputElement.value.length, this.inputElement.value.length);
-
-            // Stop listening after getting final result on mobile
-            setTimeout(() => {
-                if (this.isListening) {
-                    this.stopListening();
-                }
-            }, 500);
-        }
-    }
-
-    handleDesktopResults(event) {
+    processResults(event) {
         let newFinalTranscript = '';
         let interimTranscript = '';
+        let totalConfidence = 0;
+        let finalResultCount = 0;
 
-        // Process all results
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
+            const confidence = event.results[i][0].confidence || 0.9;
 
             if (event.results[i].isFinal) {
-                newFinalTranscript += transcript;
+                if (i >= this.lastProcessedIndex) {
+                    newFinalTranscript += transcript;
+                    totalConfidence += confidence;
+                    finalResultCount++;
+                }
             } else {
-                interimTranscript += transcript;
+                if (confidence >= this.minInterimConfidence) {
+                    interimTranscript += transcript;
+                }
             }
         }
 
-        // Handle final results - add to our accumulated final transcript
         if (newFinalTranscript) {
-            console.log('💻 Desktop final speech result:', newFinalTranscript);
-            this.finalTranscript += newFinalTranscript;
+            this.lastProcessedIndex = event.results.length;
+            newFinalTranscript = newFinalTranscript.trim().replace(/\s+/g, ' ');
+            this.accumulatedTranscript += (this.accumulatedTranscript ? ' ' : '') + newFinalTranscript;
+            
+            if (finalResultCount > 0) {
+                const avgConfidence = totalConfidence / finalResultCount;
+                this.confidenceSum += avgConfidence;
+                this.confidenceCount++;
+                this.hasReceivedFinalSpeech = true;
+            }
 
-            // Update input with original text + all final results
-            const combinedText = this.originalText.trim() +
-                                (this.originalText.trim() ? ' ' : '') +
-                                this.finalTranscript.trim();
-            this.inputElement.value = combinedText;
+            this.lastResultTime = Date.now();
+            this.updateInputDisplay('');
+            this.debouncedAutoSendDetection();
+        } else if (interimTranscript) {
+            this.debouncedUpdateDisplay(interimTranscript);
+        }
+    }
 
-            // Focus input for potential editing
-            this.inputElement.focus();
-            this.inputElement.setSelectionRange(this.inputElement.value.length, this.inputElement.value.length);
+    updateInputDisplay(interimText = '') {
+        const baseText = this.originalText.trim() + 
+                        (this.originalText.trim() ? ' ' : '') + 
+                        this.accumulatedTranscript.trim();
+        
+        let displayText = baseText;
+        
+        if (interimText) {
+            interimText = interimText.trim().replace(/\s+/g, ' ');
+            this.currentInterimText = interimText;
+            displayText += (baseText ? ' ' : '') + interimText;
+        }
+        
+        this.inputElement.value = displayText;
+        this.inputElement.focus();
+        this.inputElement.setSelectionRange(this.inputElement.value.length, this.inputElement.value.length);
+    }
+
+    shouldAutoSend() {
+        if (!this.autoSendEnabled) return false;
+
+        const currentText = this.inputElement.value.trim();
+        const meaningfulContent = currentText.length > 2; // At least 3 characters
+
+        if (!meaningfulContent) return false;
+
+        // If we have received final speech results, check confidence
+        if (this.hasReceivedFinalSpeech) {
+            const avgConfidence = this.confidenceCount > 0 ? this.confidenceSum / this.confidenceCount : 0;
+            // More permissive confidence check - if we have any meaningful text, send it
+            return avgConfidence >= this.minConfidence || currentText.length > 5;
         }
 
-        // Handle interim results - show them temporarily
-        if (interimTranscript) {
-            console.log('⏳ Desktop interim speech result:', interimTranscript);
+        // If no final speech yet but we have meaningful content, allow auto-send
+        return currentText.length > 5;
+    }
 
-            // Show original text + final results + current interim
-            const displayText = this.originalText.trim() +
-                               (this.originalText.trim() ? ' ' : '') +
-                               this.finalTranscript.trim() +
-                               (this.finalTranscript.trim() ? ' ' : '') +
-                               interimTranscript.trim();
-            this.inputElement.value = displayText;
+    performAutoSend() {
+        if (!this.autoSendEnabled) return;
+
+        const messageText = this.inputElement.value.trim();
+        if (!messageText) return;
+
+        console.log(`Auto-sending: "${messageText}"`);
+
+        if (this.isListening) {
+            this.stopListening();
         }
+
+        this.clearAllTimers();
+        this.updateButtonState('processing');
+
+        // Use the existing chat system's sendMessage function
+        // This is the most reliable approach as it uses the same logic as manual sending
+        try {
+            // Check if the global chatSendMessage function exists (from chat.js)
+            if (typeof window.chatSendMessage === 'function') {
+                // Ensure the input has the message text
+                this.inputElement.value = messageText;
+                // Call the existing sendMessage function
+                window.chatSendMessage();
+                setTimeout(() => this.updateButtonState('idle'), 1000);
+                return;
+            }
+
+            // Fallback: trigger the form submission event properly
+            const chatForm = document.getElementById('chat-form');
+            if (chatForm) {
+                // Ensure the input has the message text
+                this.inputElement.value = messageText;
+
+                // Create and dispatch a proper submit event
+                const submitEvent = new Event('submit', {
+                    bubbles: true,
+                    cancelable: true
+                });
+
+                // Dispatch the event - this will trigger the existing form handler
+                chatForm.dispatchEvent(submitEvent);
+                setTimeout(() => this.updateButtonState('idle'), 1000);
+                return;
+            }
+
+            // Final fallback: click the send button
+            const sendButton = document.getElementById('send-btn');
+            if (sendButton && !sendButton.disabled) {
+                this.inputElement.value = messageText;
+                sendButton.click();
+                setTimeout(() => this.updateButtonState('idle'), 1000);
+                return;
+            }
+
+        } catch (error) {
+            console.error('Auto-send error:', error);
+        }
+
+        // Reset button state if all methods failed
+        setTimeout(() => this.updateButtonState('idle'), 500);
+    }
+
+    // Timer management
+    clearAllTimers() {
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        if (this.speechEndTimer) {
+            clearTimeout(this.speechEndTimer);
+            this.speechEndTimer = null;
+        }
+    }
+
+    startAutoSendDetection() {
+        if (!this.autoSendEnabled || !this.hasReceivedFinalSpeech) return;
+
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+        }
+
+        this.silenceTimer = setTimeout(() => {
+            if (this.shouldAutoSend()) {
+                this.performAutoSend();
+            }
+        }, this.silenceThreshold);
+    }
+
+    startSpeechEndDetection() {
+        if (!this.autoSendEnabled) return;
+
+        if (this.speechEndTimer) {
+            clearTimeout(this.speechEndTimer);
+        }
+
+        this.speechEndTimer = setTimeout(() => {
+            if (this.speechEnded && this.hasReceivedFinalSpeech && this.shouldAutoSend()) {
+                this.performAutoSend();
+            }
+        }, this.speechEndThreshold);
+    }
+
+    // Event handlers
+    onStart() {
+        this.isListening = true;
+        this.updateButtonState('listening');
+    }
+
+    onSpeechStart() {
+        this.speechStarted = true;
+        this.speechEnded = false;
+        this.lastSpeechTime = Date.now();
+        this.updateButtonState('speaking');
+
+        if (this.speechEndTimer) {
+            clearTimeout(this.speechEndTimer);
+            this.speechEndTimer = null;
+        }
+    }
+
+    onSpeechEnd() {
+        this.speechEnded = true;
+        this.updateButtonState('listening');
+
+        // More aggressive auto-send after speech ends
+        setTimeout(() => {
+            if (this.hasReceivedFinalSpeech && this.shouldAutoSend()) {
+                this.performAutoSend();
+            }
+        }, 300); // Slightly longer delay to ensure final results are processed
+
+        this.debouncedSpeechEndDetection();
+    }
+
+    onEnd() {
+        this.isListening = false;
+        this.updateButtonState('idle');
+        this.clearAllTimers();
+
+        const shouldAutoSend = this.shouldAutoSend();
+
+        if (shouldAutoSend) {
+            this.performAutoSend();
+        }
+
+        // Reset state
+        this.originalText = '';
+        this.accumulatedTranscript = '';
+        this.lastProcessedIndex = 0;
+        this.currentInterimText = '';
+        this.hasReceivedFinalSpeech = false;
+        this.lastSpeechTime = null;
+        this.lastResultTime = null;
+        this.confidenceSum = 0;
+        this.confidenceCount = 0;
+        this.speechStarted = false;
+        this.speechEnded = false;
+
+        setTimeout(() => {
+            if (this.recognition) {
+                this.recognition.abort();
+            }
+        }, 100);
     }
 
     onError(event) {
         console.error('Speech recognition error:', event.error);
+        this.clearAllTimers();
 
-        // Reset transcript variables on error
+        // Reset state on error
         this.originalText = '';
-        this.finalTranscript = '';
+        this.accumulatedTranscript = '';
+        this.lastProcessedIndex = 0;
+        this.currentInterimText = '';
+        this.hasReceivedFinalSpeech = false;
+        this.lastSpeechTime = null;
+        this.lastResultTime = null;
+        this.confidenceSum = 0;
+        this.confidenceCount = 0;
+        this.speechStarted = false;
+        this.speechEnded = false;
 
-        let errorMessage = 'Voice input error: ';
-        let shouldShowError = true;
+        this.isListening = false;
+        this.updateButtonState('idle');
 
+        let errorMessage = 'Speech recognition error: ';
         switch (event.error) {
             case 'no-speech':
-                if (this.isMobile) {
-                    // On mobile, no-speech is common and less concerning
-                    errorMessage = 'No speech detected. Tap the microphone to try again.';
-                } else {
-                    errorMessage += 'No speech detected. Please try again.';
-                }
+                errorMessage += 'No speech detected. Please try again.';
                 break;
             case 'audio-capture':
                 errorMessage += 'Microphone not accessible. Please check permissions.';
@@ -315,91 +462,25 @@ class SpeechRecognitionService {
                 errorMessage += 'Microphone permission denied. Please allow microphone access.';
                 break;
             case 'network':
-                if (this.isMobile) {
-                    errorMessage += 'Network error. Check your connection and try again.';
-                } else {
-                    errorMessage += 'Network error. Please check your connection.';
-                }
+                errorMessage += 'Network error. Please check your connection.';
                 break;
             case 'aborted':
-                // Don't show error for aborted - it's usually intentional
-                shouldShowError = false;
-                break;
-            case 'service-not-allowed':
-                errorMessage += 'Speech service not available. Please try again later.';
-                break;
+                return; // Don't show error for aborted
             default:
                 errorMessage += event.error;
         }
 
-        if (shouldShowError) {
-            this.showError(errorMessage);
-        }
+        this.showError(errorMessage);
     }
 
-    onEnd() {
-        console.log('🏁 Speech recognition ended');
-        this.isListening = false;
-        this.updateButtonState('idle');
-
-        // Clear timeout
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-            this.timeoutId = null;
-        }
-
-        // Reset transcript variables for next session
-        this.originalText = '';
-        this.finalTranscript = '';
-
-        // Mobile-specific handling: prevent auto-restart issues
-        if (this.isMobile) {
-            // On mobile, ensure we don't accidentally restart
-            setTimeout(() => {
-                if (this.recognition) {
-                    this.recognition.abort(); // Ensure complete stop
-                }
-            }, 100);
-        }
-
-        // Don't automatically restart - user must click button again
-        // This prevents the annoying auto-restart behavior
-
-        // Clear any lingering status messages after a delay
-        setTimeout(() => {
-            this.clearStatus();
-        }, 3000);
-    }
-
-    onSpeechStart() {
-        console.log('🗣️ Speech detected');
-        this.updateButtonState('speaking');
-        // No notification - just visual feedback
-    }
-
-    onSpeechEnd() {
-        console.log('🤐 Speech ended');
-        this.updateButtonState('listening'); // Back to listening, not processing
-        // No notification - keep listening for more speech
-    }
-
-    onAudioStart() {
-        console.log('🔊 Audio capture started');
-    }
-
-    onAudioEnd() {
-        console.log('🔇 Audio capture ended');
-    }
-
-    // UI Helper Methods
+    // UI methods
     updateButtonState(state) {
         if (!this.voiceButton) return;
 
-        // Remove all state classes
-        this.voiceButton.classList.remove('btn-outline-secondary', 'btn-danger', 'btn-warning', 'btn-info');
-        
+        this.voiceButton.classList.remove('btn-outline-secondary', 'btn-danger', 'btn-warning', 'btn-info', 'btn-success');
+
         const icon = this.voiceButton.querySelector('i');
-        
+
         switch (state) {
             case 'listening':
                 this.voiceButton.classList.add('btn-danger');
@@ -412,9 +493,9 @@ class SpeechRecognitionService {
                 icon.className = 'fas fa-volume-up';
                 break;
             case 'processing':
-                this.voiceButton.classList.add('btn-info');
-                this.voiceButton.title = 'Processing speech...';
-                icon.className = 'fas fa-spinner fa-spin';
+                this.voiceButton.classList.add('btn-success');
+                this.voiceButton.title = 'Auto-sending message...';
+                icon.className = 'fas fa-paper-plane';
                 break;
             default: // idle
                 this.voiceButton.classList.add('btn-outline-secondary');
@@ -423,31 +504,21 @@ class SpeechRecognitionService {
         }
     }
 
-    showStatus(message, type = 'info') {
-        // Use existing toast system if available
-        if (typeof AIBuilder !== 'undefined' && AIBuilder.showToast) {
-            AIBuilder.showToast(message, type);
-        } else {
-            console.log(`🎤 ${message}`);
-        }
-    }
-
     showError(message) {
-        this.showStatus(message, 'error');
-    }
-
-    clearStatus() {
-        // Clear any status messages if needed
+        if (typeof AIBuilder !== 'undefined' && AIBuilder.showToast) {
+            AIBuilder.showToast(message, 'error');
+        } else {
+            console.error(message);
+        }
     }
 
     handleUnsupportedBrowser() {
         if (this.voiceButton) {
             this.voiceButton.style.display = 'none';
-            console.warn('Voice input not available in this browser');
         }
     }
 
-    // Public methods for external use
+    // Public methods
     isAvailable() {
         return this.isSupported;
     }
@@ -456,42 +527,25 @@ class SpeechRecognitionService {
         return {
             supported: this.isSupported,
             listening: this.isListening,
-            isMobile: this.isMobile
+            autoSendEnabled: this.autoSendEnabled,
+            hasReceivedFinalSpeech: this.hasReceivedFinalSpeech,
+            averageConfidence: this.confidenceCount > 0 ? this.confidenceSum / this.confidenceCount : 0
         };
     }
 
-    // Get mobile-specific usage tips
-    getMobileUsageTips() {
-        if (!this.isMobile) return null;
-
-        return {
-            tips: [
-                "Speak clearly and at normal volume",
-                "Keep your device close to your mouth",
-                "Avoid background noise when possible",
-                "Tap the microphone button to start/stop",
-                "Speech will stop automatically after a pause"
-            ],
-            limitations: [
-                "Continuous listening may not work on all mobile browsers",
-                "Some mobile browsers require user interaction to start recording",
-                "Background apps may interfere with microphone access"
-            ]
-        };
+    toggleAutoSend() {
+        this.autoSendEnabled = !this.autoSendEnabled;
+        return this.autoSendEnabled;
     }
 }
 
 // Initialize speech recognition when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize for chat pages (message input)
     if (document.getElementById('voice-input-btn')) {
         window.speechRecognition = new SpeechRecognitionService('message-input', 'voice-input-btn');
-        console.log('🎤 Speech recognition service initialized for chat');
     }
 
-    // Initialize for bot creation/edit pages (system prompt input)
     if (document.getElementById('voice-prompt-btn')) {
         window.promptSpeechRecognition = new SpeechRecognitionService('id_system_prompt', 'voice-prompt-btn');
-        console.log('🎤 Speech recognition service initialized for system prompt');
     }
 });
