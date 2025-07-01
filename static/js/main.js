@@ -1,19 +1,54 @@
-// Main JavaScript utilities for Conversational AI Builder
+/**
+ * Main JavaScript utilities for Conversational AI Builder
+ *
+ * This file provides core frontend functionality including:
+ * - Bootstrap component initialization
+ * - Form validation and UX enhancements
+ * - UI utilities and helper functions
+ * - Global event handlers and keyboard shortcuts
+ * - Toast notification system
+ *
+ * Architecture:
+ * - Uses vanilla JavaScript for better performance
+ * - Integrates with Bootstrap 5 components
+ * - Provides global AIBuilder utility namespace
+ * - Handles progressive enhancement patterns
+ */
 
+// Wait for DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
+
+    // ========================================
+    // BOOTSTRAP COMPONENT INITIALIZATION
+    // ========================================
+
+    /**
+     * Initialize Bootstrap tooltips for all elements with data-bs-toggle="tooltip"
+     * Tooltips provide helpful hints and additional information on hover
+     */
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Initialize popovers
+    /**
+     * Initialize Bootstrap popovers for all elements with data-bs-toggle="popover"
+     * Popovers provide more detailed information in a dismissible overlay
+     */
     var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
     var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
         return new bootstrap.Popover(popoverTriggerEl);
     });
 
-    // Auto-dismiss alerts after 5 seconds
+    // ========================================
+    // ALERT AND NOTIFICATION MANAGEMENT
+    // ========================================
+
+    /**
+     * Auto-dismiss Bootstrap alerts after 5 seconds
+     * This improves UX by automatically clearing success/info messages
+     * while allowing users to manually dismiss them earlier if needed
+     */
     setTimeout(function() {
         var alerts = document.querySelectorAll('.alert-dismissible');
         alerts.forEach(function(alert) {
@@ -22,40 +57,60 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
 
-    // Form validation enhancements
+    // ========================================
+    // FORM VALIDATION AND UX ENHANCEMENTS
+    // ========================================
+
+    /**
+     * Enhanced form validation using Bootstrap's validation classes
+     * Provides real-time feedback and prevents submission of invalid forms
+     * Uses HTML5 validation API with Bootstrap styling
+     */
     var forms = document.querySelectorAll('.needs-validation');
     forms.forEach(function(form) {
         form.addEventListener('submit', function(event) {
+            // Check if form passes HTML5 validation
             if (!form.checkValidity()) {
-                event.preventDefault();
-                event.stopPropagation();
+                event.preventDefault();  // Prevent form submission
+                event.stopPropagation(); // Stop event bubbling
             }
+            // Add Bootstrap validation styling classes
             form.classList.add('was-validated');
         });
     });
 
-    // Smooth scrolling for anchor links
+    /**
+     * Smooth scrolling for internal anchor links
+     * Enhances navigation UX by providing smooth transitions
+     * instead of jarring jumps to page sections
+     */
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             e.preventDefault();
             const target = document.querySelector(this.getAttribute('href'));
             if (target) {
                 target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
+                    behavior: 'smooth',  // Smooth animation
+                    block: 'start'       // Align to top of viewport
                 });
             }
         });
     });
 
-    // Loading button states
+    /**
+     * Loading button states for better user feedback
+     * Shows spinner and disables button during async operations
+     * Prevents double-clicks and provides visual feedback
+     */
     document.querySelectorAll('.btn-loading').forEach(button => {
         button.addEventListener('click', function() {
             const originalText = this.innerHTML;
+            // Show loading state with spinner
             this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
             this.disabled = true;
-            
-            // Re-enable after 3 seconds (fallback)
+
+            // Fallback: Re-enable after 3 seconds if not manually reset
+            // This prevents buttons from being permanently disabled
             setTimeout(() => {
                 this.innerHTML = originalText;
                 this.disabled = false;

@@ -1,31 +1,70 @@
-/* Chat Interface Styles */
+/**
+ * Chat Interface Styles for Conversational AI Builder
+ *
+ * This stylesheet provides specialized styling for the chat interface including:
+ * - Message bubbles with distinct user/AI styling
+ * - Markdown formatting for AI responses
+ * - Audio playback controls and indicators
+ * - Voice input button states and animations
+ * - Typing indicators and loading states
+ * - Responsive design for mobile devices
+ * - Accessibility enhancements
+ *
+ * Architecture:
+ * - Uses CSS custom properties for theming consistency
+ * - Follows chat UI best practices (message bubbles, timestamps)
+ * - Supports real-time features (typing indicators, audio playback)
+ * - Mobile-first responsive design
+ * - Accessibility features for screen readers and keyboard navigation
+ */
 
-/* Messages Container */
+/* ========================================
+   MESSAGES CONTAINER
+   ======================================== */
+
+/**
+ * Main scrollable container for chat messages
+ * - Fixed height with smooth scrolling behavior
+ * - Auto-scroll to bottom for new messages
+ * - Theme-aware background and borders
+ */
 .messages-container {
-    height: 500px;
-    overflow-y: auto;
-    padding: 1rem;
-    background-color: var(--bg-light);
-    border-radius: 0.375rem;
-    scroll-behavior: smooth;
-    border: 1px solid var(--border-color);
+    height: 500px;           /* Fixed height for consistent layout */
+    overflow-y: auto;        /* Vertical scrolling for message history */
+    padding: 1rem;           /* Comfortable padding around messages */
+    background-color: var(--bg-light);  /* Theme-aware background */
+    border-radius: 0.375rem; /* Consistent with app border radius */
+    scroll-behavior: smooth; /* Smooth auto-scrolling to new messages */
+    border: 1px solid var(--border-color); /* Subtle border definition */
 }
 
-/* Message Styles */
+/* ========================================
+   MESSAGE LAYOUT AND ANIMATIONS
+   ======================================== */
+
+/**
+ * Base message styling with entrance animation
+ * - Flexbox layout for proper alignment
+ * - Slide-in animation for new messages
+ */
 .message {
-    margin-bottom: 1rem;
-    display: flex;
-    animation: messageSlideIn 0.3s ease-out;
+    margin-bottom: 1rem;     /* Spacing between messages */
+    display: flex;           /* Flexbox for alignment control */
+    animation: messageSlideIn 0.3s ease-out; /* Smooth entrance animation */
 }
 
+/**
+ * Message entrance animation
+ * Creates a smooth slide-in effect for new messages
+ */
 @keyframes messageSlideIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(10px); /* Start slightly below */
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0);    /* End in final position */
     }
 }
 

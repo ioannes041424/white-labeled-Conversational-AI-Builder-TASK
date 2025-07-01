@@ -1,28 +1,55 @@
-import json
-import requests
-from datetime import datetime
+# Standard library imports
+import json  # Used for REST API calls to Google Cloud TTS
+import requests  # Used for HTTP requests to Google Cloud TTS API
+import re  # Used for regex pattern matching in markdown processing
+import logging
+
+# Django imports
 from django.conf import settings
 from django.core.files.base import ContentFile
+
+# Azure AI SDK imports for GitHub Models integration
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
-from .models import Message
-import logging
-import re
 
+# Local imports
+from .models import Message
+
+# Configure logging for this module
 logger = logging.getLogger(__name__)
 
 
 def markdown_to_clean_text(text):
     """
-    Convert markdown text to clean, readable text for voice synthesis
-    Removes all markdown formatting, emojis, and special characters while preserving the actual content
+    Convert markdown text to clean, readable text for voice synthesis.
+
+    This function is critical for the TTS pipeline as it ensures that AI-generated
+    markdown content is converted to natural speech. It removes all formatting,
+    emojis, and special characters while preserving the actual readable content.
+
+    Processing Steps:
+    1. Remove emojis and Unicode symbols that shouldn't be spoken
+    2. Strip markdown formatting (bold, italic, headers, links, etc.)
+    3. Clean up code blocks and inline code
+    4. Normalize whitespace and add natural speech pauses
+    5. Remove any remaining special characters
+
+    Args:
+        text (str): Raw markdown text from AI response
+
+    Returns:
+        str: Clean text suitable for text-to-speech synthesis
+
+    Example:
+        Input:  "**Hello!** Here's a `code` example:\n```python\nprint('hi')\n```"
+        Output: "Hello! Here's a code example."
     """
     if not text:
         return ""
 
-    # Remove emojis and other Unicode symbols that shouldn't be read aloud
-    # This regex removes most emoji ranges and symbols
+    # Step 1: Remove emojis and Unicode symbols that shouldn't be read aloud
+    # These regex patterns cover most emoji ranges and symbols
     text = re.sub(r'[\U0001F600-\U0001F64F]', '', text)  # Emoticons
     text = re.sub(r'[\U0001F300-\U0001F5FF]', '', text)  # Symbols & pictographs
     text = re.sub(r'[\U0001F680-\U0001F6FF]', '', text)  # Transport & map symbols
@@ -32,237 +59,342 @@ def markdown_to_clean_text(text):
     text = re.sub(r'[\U0001F900-\U0001F9FF]', '', text)  # Supplemental Symbols and Pictographs
     text = re.sub(r'[\U0001FA70-\U0001FAFF]', '', text)  # Symbols and Pictographs Extended-A
 
-    # Remove common emoji-like characters
+    # Additional emoji cleanup for common ranges
     text = re.sub(r'[😀-🙏🌀-🗿🚀-🛿🇀-🇿♀-♿⚀-⚿✀-➿]', '', text)
 
-    # Remove code blocks first (```code```)
+    # Step 2: Remove code blocks first (```code```) - these shouldn't be spoken
     text = re.sub(r'```[\s\S]*?```', '', text)
 
-    # Remove inline code (`code`)
+    # Step 3: Remove inline code (`code`) but keep the content
     text = re.sub(r'`([^`]*)`', r'\1', text)
 
-    # Remove bold and italic formatting
-    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold**
-    text = re.sub(r'__(.*?)__', r'\1', text)      # __bold__
-    text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic*
-    text = re.sub(r'_(.*?)_', r'\1', text)        # _italic_
+    # Step 4: Remove markdown formatting while preserving content
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold** -> content
+    text = re.sub(r'__(.*?)__', r'\1', text)      # __bold__ -> content
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic* -> content
+    text = re.sub(r'_(.*?)_', r'\1', text)        # _italic_ -> content
 
-    # Remove headers (# ## ###)
+    # Step 5: Remove headers (# ## ###) - just keep the text
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
 
-    # Remove links but keep the text [text](url) -> text
+    # Step 6: Remove links but keep the text [text](url) -> text
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
 
-    # Remove list markers (- * + 1. 2. etc.)
+    # Step 7: Remove list markers (- * + 1. 2. etc.)
     text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
     text = re.sub(r'^[\s]*\d+\.\s+', '', text, flags=re.MULTILINE)
 
-    # Remove blockquotes (>)
+    # Step 8: Remove blockquotes (>)
     text = re.sub(r'^>\s+', '', text, flags=re.MULTILINE)
 
-    # Remove horizontal rules (--- or ***)
+    # Step 9: Remove horizontal rules (--- or ***)
     text = re.sub(r'^[-*]{3,}$', '', text, flags=re.MULTILINE)
 
-    # Clean up extra whitespace and line breaks
+    # Step 10: Clean up whitespace and normalize line breaks
     text = re.sub(r'\n\s*\n', '\n\n', text)  # Multiple line breaks to double
     text = re.sub(r'\n{3,}', '\n\n', text)   # More than 2 line breaks to 2
     text = text.strip()
 
-    # Replace multiple spaces with single space
+    # Step 11: Replace multiple spaces with single space
     text = re.sub(r'\s+', ' ', text)
 
-    # Add natural pauses for better speech
-    # Replace double line breaks with longer pauses
-    text = text.replace('\n\n', '. ')
-    text = text.replace('\n', '. ')
+    # Step 12: Add natural pauses for better speech synthesis
+    # Replace line breaks with periods for natural speech pauses
+    text = text.replace('\n\n', '. ')  # Paragraph breaks become longer pauses
+    text = text.replace('\n', '. ')    # Line breaks become shorter pauses
 
-    # Clean up any remaining formatting artifacts
+    # Step 13: Clean up any remaining formatting artifacts
     text = re.sub(r'[*_`#>]', '', text)
 
-    # Remove any remaining special characters that might be read as symbols
+    # Step 14: Remove any remaining special characters that might be read as symbols
+    # Keep only alphanumeric, whitespace, and basic punctuation
     text = re.sub(r'[^\w\s\.,!?;:\'"()-]', '', text)
 
     return text.strip()
 
 
 class VoiceSelectionService:
-    """Service for intelligently selecting Google Cloud Text-to-Speech voices based on bot characteristics"""
+    """
+    AI-powered service for intelligently selecting Google Cloud Text-to-Speech voices.
 
-    # Best 4 most natural voices (2 male, 2 female)
+    This service uses GPT-4 to analyze bot characteristics (name and system prompt)
+    and automatically select the most appropriate voice from a curated set of 4
+    high-quality Google Cloud TTS Chirp3-HD voices.
+
+    Architecture:
+    - Uses GitHub Models GPT-4 for intelligent voice matching
+    - Curated selection of 4 premium voices (2 male, 2 female)
+    - Fallback system for when AI selection fails
+    - Voice profiles with personality and tone characteristics
+
+    Voice Selection Process:
+    1. Analyze bot name for gender/personality hints
+    2. Analyze system prompt for role and tone requirements
+    3. Use AI to match characteristics to voice profiles
+    4. Return the most appropriate voice ID
+    """
+
+    # Curated selection of the 4 best Google Cloud TTS voices
+    # These are premium Chirp3-HD voices chosen for naturalness and quality
     VOICE_PROFILES = {
-        # Female voices - most natural
-        'en-US-Chirp3-HD-Achernar': {  # Female, friendly and warm
+        # Female voices - natural and expressive
+        'en-US-Chirp3-HD-Achernar': {
             'name': 'Achernar',
             'gender': 'female',
             'age': 'adult',
             'tone': 'friendly',
             'accent': 'american',
-            'personality': ['helpful', 'warm', 'conversational', 'natural']
+            'personality': ['helpful', 'warm', 'conversational', 'natural'],
+            'description': 'Female voice with friendly, warm tone - ideal for customer service, assistants, and conversational bots'
         },
-        'en-US-Chirp3-HD-Leda': {  # Female, elegant and sophisticated
+        'en-US-Chirp3-HD-Leda': {
             'name': 'Leda',
             'gender': 'female',
             'age': 'adult',
             'tone': 'elegant',
             'accent': 'american',
-            'personality': ['sophisticated', 'professional', 'polished', 'natural']
+            'personality': ['sophisticated', 'professional', 'polished', 'natural'],
+            'description': 'Female voice with elegant, sophisticated tone - ideal for professional, business, and educational bots'
         },
 
-        # Male voices - most natural
-        'en-US-Chirp3-HD-Orus': {  # Male, warm and approachable
+        # Male voices - natural and authoritative
+        'en-US-Chirp3-HD-Orus': {
             'name': 'Orus',
             'gender': 'male',
             'age': 'adult',
             'tone': 'warm',
             'accent': 'american',
-            'personality': ['warm', 'friendly', 'supportive', 'natural']
+            'personality': ['warm', 'friendly', 'supportive', 'natural'],
+            'description': 'Male voice with warm, approachable tone - ideal for coaching, support, and friendly assistant bots'
         },
-        'en-US-Chirp3-HD-Charon': {  # Male, deep and authoritative
+        'en-US-Chirp3-HD-Charon': {
             'name': 'Charon',
             'gender': 'male',
             'age': 'adult',
             'tone': 'authoritative',
             'accent': 'american',
-            'personality': ['authoritative', 'professional', 'confident', 'natural']
+            'personality': ['authoritative', 'professional', 'confident', 'natural'],
+            'description': 'Male voice with authoritative, confident tone - ideal for expert, advisor, and professional bots'
         }
     }
 
     @classmethod
     def select_voice_for_bot(cls, bot_name, system_prompt):
         """
-        AI-powered voice selection from 4 best voices based on bot name and system prompt
+        Use AI to intelligently select the most appropriate voice for a bot.
+
+        This method leverages GPT-4 to analyze both the bot's name and system prompt
+        to determine the most suitable voice from the curated selection. The AI
+        considers factors like gender hints, personality traits, professional tone,
+        and use case to make an intelligent matching decision.
+
+        Process:
+        1. Initialize GitHub Models GPT-4 client
+        2. Create structured prompt with voice options and analysis criteria
+        3. Send bot characteristics to AI for analysis
+        4. Parse AI response to extract voice selection
+        5. Validate selection and fallback if needed
+
+        Args:
+            bot_name (str): Name of the bot (may contain gender/personality hints)
+            system_prompt (str): Bot's system prompt defining role and personality
+
+        Returns:
+            str: Google Cloud TTS voice ID (e.g., 'en-US-Chirp3-HD-Achernar')
+
+        Example:
+            select_voice_for_bot("Sarah Assistant", "You are a friendly customer service rep")
+            # Returns: 'en-US-Chirp3-HD-Achernar' (female, friendly)
         """
-        logger.info(f"AI selecting voice for bot: '{bot_name}'")
+        logger.info(f"🎯 AI selecting voice for bot: '{bot_name}'")
 
         try:
-            # Import here to avoid circular imports
+            # Import here to avoid circular imports with Django settings
             from django.conf import settings
             from azure.ai.inference import ChatCompletionsClient
             from azure.ai.inference.models import SystemMessage, UserMessage
             from azure.core.credentials import AzureKeyCredential
 
+            # Check if GitHub token is available for AI selection
             if not settings.GITHUB_TOKEN:
-                logger.warning("GitHub token not available, using simple fallback")
+                logger.warning("GitHub token not available, using rule-based fallback")
                 return cls._simple_fallback(bot_name, system_prompt)
 
-            # Initialize GitHub Models client
+            # Initialize GitHub Models client for GPT-4 access
             client = ChatCompletionsClient(
                 endpoint="https://models.github.ai/inference",
                 credential=AzureKeyCredential(settings.GITHUB_TOKEN),
             )
 
-            # Create AI prompt for voice selection
-            system_message = """You are an expert voice selector. Choose the BEST voice from these 4 options:
+            # Create structured AI prompt for voice selection
+            # This prompt provides clear options and analysis criteria
+            system_message = """You are an expert voice selector for conversational AI bots. Choose the BEST voice from these 4 premium options:
 
 1. en-US-Chirp3-HD-Achernar (female, friendly, warm, conversational)
+   - Best for: Customer service, assistants, helpful bots
+
 2. en-US-Chirp3-HD-Leda (female, elegant, sophisticated, professional)
+   - Best for: Business, professional, educational bots
+
 3. en-US-Chirp3-HD-Orus (male, warm, friendly, supportive)
+   - Best for: Coaching, support, friendly assistant bots
+
 4. en-US-Chirp3-HD-Charon (male, authoritative, professional, confident)
+   - Best for: Expert advisors, professional consultants, authoritative bots
 
 Analyze BOTH the bot name AND the system prompt to determine:
-- Gender preference (male/female/neutral)
+- Gender preference (from name hints or role requirements)
 - Personality type (professional/friendly/authoritative/warm)
 - Use case (business/casual/support/educational)
+- Tone requirements (formal/casual/supportive/confident)
 
 Return ONLY the voice ID. Example: en-US-Chirp3-HD-Achernar"""
 
+            # Create user message with bot characteristics for analysis
             user_message = f"""Bot Name: "{bot_name}"
 
 System Prompt: "{system_prompt}"
 
 Based on the bot's name and role/personality described in the system prompt, which voice fits best?"""
 
+            # Prepare messages for AI completion
             messages = [
                 SystemMessage(content=system_message),
                 UserMessage(content=user_message)
             ]
 
-            # Get AI response
-            logger.info(f"Sending AI voice selection request for '{bot_name}'")
+            # Send request to AI for voice selection
+            logger.info(f"📤 Sending AI voice selection request for '{bot_name}'")
 
             response = client.complete(
                 messages=messages,
-                model="openai/gpt-4o-mini",  # Use mini for faster, simpler responses
-                temperature=0.1,
-                max_tokens=150,
-                top_p=0.9
+                model="openai/gpt-4o-mini",  # Use mini for faster, cost-effective responses
+                temperature=0.1,  # Low temperature for consistent, focused responses
+                max_tokens=150,   # Short response expected (just voice ID)
+                top_p=0.9        # Focused sampling for better consistency
             )
 
+            # Process AI response
             if response and response.choices and response.choices[0].message.content:
                 ai_response = response.choices[0].message.content.strip()
-                logger.info(f"AI raw response: '{ai_response}'")
+                logger.info(f"📥 AI raw response: '{ai_response}'")
 
-                # Extract voice ID from response
+                # Extract and validate voice ID from AI response
                 selected_voice = cls._extract_voice_from_response(ai_response)
 
                 if selected_voice:
                     voice_name = cls.VOICE_PROFILES[selected_voice]['name']
-                    logger.info(f"🤖 AI selected voice: {voice_name} ({selected_voice}) for '{bot_name}'")
+                    logger.info(f"✅ AI selected voice: {voice_name} ({selected_voice}) for '{bot_name}'")
                     return selected_voice
                 else:
-                    logger.warning(f"AI returned invalid voice: '{ai_response}', using fallback")
+                    logger.warning(f"⚠️ AI returned invalid voice: '{ai_response}', using fallback")
                     return cls._simple_fallback(bot_name, system_prompt)
             else:
-                logger.warning("AI returned empty response, using fallback")
+                logger.warning("⚠️ AI returned empty response, using fallback")
                 return cls._simple_fallback(bot_name, system_prompt)
 
         except Exception as e:
-            logger.error(f"Error in AI voice selection: {str(e)}")
+            logger.error(f"❌ Error in AI voice selection: {str(e)}")
             return cls._simple_fallback(bot_name, system_prompt)
 
     @classmethod
     def _extract_voice_from_response(cls, ai_response):
-        """Extract valid voice ID from AI response"""
-        # Clean the response
+        """
+        Extract and validate voice ID from AI response.
+
+        The AI may return the voice ID in various formats, so this method
+        handles different response patterns and extracts the valid voice ID.
+
+        Args:
+            ai_response (str): Raw response from AI
+
+        Returns:
+            str or None: Valid voice ID if found, None otherwise
+        """
+        # Clean the response by removing quotes and extra whitespace
         cleaned = ai_response.strip().replace('"', '').replace("'", "")
 
-        # Check for exact voice ID matches
+        # First, check for exact voice ID matches (most reliable)
         for voice_id in cls.VOICE_PROFILES.keys():
             if voice_id in cleaned:
                 return voice_id
 
-        # Check for voice name matches
-        if "achernar" in cleaned.lower():
+        # Fallback: Check for voice name matches (case-insensitive)
+        cleaned_lower = cleaned.lower()
+        if "achernar" in cleaned_lower:
             return "en-US-Chirp3-HD-Achernar"
-        elif "leda" in cleaned.lower():
+        elif "leda" in cleaned_lower:
             return "en-US-Chirp3-HD-Leda"
-        elif "orus" in cleaned.lower():
+        elif "orus" in cleaned_lower:
             return "en-US-Chirp3-HD-Orus"
-        elif "charon" in cleaned.lower():
+        elif "charon" in cleaned_lower:
             return "en-US-Chirp3-HD-Charon"
 
+        # No valid voice found
         return None
 
     @classmethod
     def _simple_fallback(cls, bot_name, system_prompt):
-        """Simple fallback when AI fails"""
-        # Basic analysis as backup
+        """
+        Rule-based fallback voice selection when AI is unavailable.
+
+        This method provides a simple but effective fallback using basic
+        pattern matching on bot names and system prompts. While not as
+        sophisticated as AI selection, it provides reasonable defaults.
+
+        Selection Logic:
+        1. Check for obvious gender indicators in bot name
+        2. Analyze system prompt for professional vs. casual tone
+        3. Apply default voice based on detected characteristics
+
+        Args:
+            bot_name (str): Name of the bot
+            system_prompt (str): Bot's system prompt
+
+        Returns:
+            str: Voice ID selected using rule-based logic
+        """
+        logger.info(f"🔄 Using rule-based fallback for '{bot_name}'")
+
+        # Convert to lowercase for case-insensitive matching
         name_lower = bot_name.lower()
         prompt_lower = system_prompt.lower()
 
-        # Check for obvious male names
-        if any(name in name_lower for name in ['john', 'mike', 'alex', 'david', 'james', 'coach', 'mr']):
-            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
-                return "en-US-Chirp3-HD-Charon"
+        # Check for obvious male name indicators
+        male_indicators = ['john', 'mike', 'alex', 'david', 'james', 'coach', 'mr', 'sir']
+        if any(name in name_lower for name in male_indicators):
+            # Choose male voice based on professional context
+            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert', 'advisor']):
+                return "en-US-Chirp3-HD-Charon"  # Authoritative male
             else:
-                return "en-US-Chirp3-HD-Orus"
-        # Check for obvious female names
-        elif any(name in name_lower for name in ['sarah', 'emma', 'lisa', 'maya', 'anna', 'assistant']):
-            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
-                return "en-US-Chirp3-HD-Leda"
+                return "en-US-Chirp3-HD-Orus"    # Warm male
+
+        # Check for obvious female name indicators
+        female_indicators = ['sarah', 'emma', 'lisa', 'maya', 'anna', 'assistant', 'ms', 'mrs']
+        if any(name in name_lower for name in female_indicators):
+            # Choose female voice based on professional context
+            if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert', 'advisor']):
+                return "en-US-Chirp3-HD-Leda"      # Elegant female
             else:
-                return "en-US-Chirp3-HD-Achernar"
-        # Default based on context
-        elif any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert']):
-            return "en-US-Chirp3-HD-Leda"  # Professional default
+                return "en-US-Chirp3-HD-Achernar"  # Friendly female
+
+        # No clear gender indicators - choose based on context
+        if any(term in prompt_lower for term in ['professional', 'business', 'manager', 'expert', 'advisor']):
+            return "en-US-Chirp3-HD-Leda"      # Professional default (female)
         else:
-            return "en-US-Chirp3-HD-Achernar"  # Friendly default
-
-
+            return "en-US-Chirp3-HD-Achernar"  # Friendly default (female)
 
     @classmethod
     def get_voice_name(cls, voice_id):
-        """Get the human-readable name for a voice ID"""
+        """
+        Get the human-readable name for a voice ID.
+
+        Args:
+            voice_id (str): Google Cloud TTS voice ID
+
+        Returns:
+            str: Human-readable voice name or 'Unknown' if not found
+        """
         return cls.VOICE_PROFILES.get(voice_id, {}).get('name', 'Unknown')
 
 

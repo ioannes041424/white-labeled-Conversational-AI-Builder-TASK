@@ -1,46 +1,94 @@
-// Clean Speech Recognition Service for Django Chat
+/**
+ * Advanced Speech Recognition Service for Conversational AI Builder
+ *
+ * This class provides sophisticated speech-to-text functionality with:
+ * - Real-time speech recognition using Web Speech API
+ * - Intelligent auto-send after speech completion
+ * - Confidence-based filtering for accuracy
+ * - Debouncing and throttling for performance
+ * - Voice activity detection and silence handling
+ * - Progressive enhancement with fallback support
+ *
+ * Key Features:
+ * - Automatic message sending after speech ends
+ * - Real-time transcript updates in input field
+ * - Confidence scoring for quality control
+ * - Optimized for conversational AI interaction
+ * - Mobile and desktop browser support
+ *
+ * Architecture:
+ * - Event-driven design with state management
+ * - Integration with chat.js for message sending
+ * - Performance optimizations with debouncing/throttling
+ * - Graceful degradation for unsupported browsers
+ */
 class SpeechRecognitionService {
     constructor(inputId = 'message-input', buttonId = 'voice-input-btn') {
-        this.recognition = null;
-        this.isListening = false;
-        this.isSupported = false;
-        this.inputElement = null;
-        this.voiceButton = null;
-        this.inputId = inputId;
-        this.buttonId = buttonId;
-        this.timeoutId = null;
-        this.maxListeningTime = 30000;
-        
-        // Transcript management
-        this.originalText = '';
-        this.accumulatedTranscript = '';
-        this.lastProcessedIndex = 0;
-        this.currentInterimText = '';
 
-        // Auto-send functionality - optimized for faster, more responsive auto-send
-        this.silenceTimer = null;
-        this.silenceThreshold = 300; // .3 seconds of silence before auto-send
-        this.speechEndTimer = null;
-        this.speechEndThreshold = 50; // 0.8 seconds after speech ends
-        this.lastSpeechTime = null;
-        this.lastResultTime = null;
-        this.hasReceivedFinalSpeech = false;
-        this.autoSendEnabled = true;
-        this.minConfidence = 0.7; // Lower confidence threshold for better responsiveness
-        this.confidenceSum = 0;
-        this.confidenceCount = 0;
-        this.minInterimConfidence = 0.4; // Lower interim confidence for faster updates
-        
-        // Voice activity detection
-        this.speechStarted = false;
-        this.speechEnded = false;
+        // ========================================
+        // CORE SPEECH RECOGNITION PROPERTIES
+        // ========================================
 
-        // Debouncing - optimized for faster response
+        this.recognition = null;           // Web Speech API recognition instance
+        this.isListening = false;          // Current listening state
+        this.isSupported = false;          // Browser support detection
+        this.inputElement = null;          // Target input element
+        this.voiceButton = null;           // Voice input button
+        this.inputId = inputId;            // Input element ID
+        this.buttonId = buttonId;          // Button element ID
+        this.timeoutId = null;             // Safety timeout for max listening time
+        this.maxListeningTime = 30000;     // Maximum listening duration (30 seconds)
+
+        // ========================================
+        // TRANSCRIPT MANAGEMENT
+        // ========================================
+
+        this.originalText = '';            // Text that was in input before speech
+        this.accumulatedTranscript = '';   // Final speech results accumulated
+        this.lastProcessedIndex = 0;       // Track processed speech results
+        this.currentInterimText = '';      // Current interim (temporary) results
+
+        // ========================================
+        // AUTO-SEND FUNCTIONALITY
+        // Optimized for fast, responsive auto-send after speech completion
+        // ========================================
+
+        this.silenceTimer = null;          // Timer for silence detection
+        this.silenceThreshold = 300;       // 0.3 seconds of silence before auto-send
+        this.speechEndTimer = null;        // Timer for speech end detection
+        this.speechEndThreshold = 50;      // 0.05 seconds after speech ends
+        this.lastSpeechTime = null;        // Timestamp of last speech activity
+        this.lastResultTime = null;        // Timestamp of last recognition result
+        this.hasReceivedFinalSpeech = false; // Whether we have final speech results
+        this.autoSendEnabled = true;       // Whether auto-send is enabled
+
+        // ========================================
+        // CONFIDENCE AND QUALITY CONTROL
+        // ========================================
+
+        this.minConfidence = 0.7;          // Minimum confidence for final results
+        this.confidenceSum = 0;            // Sum of confidence scores
+        this.confidenceCount = 0;          // Count of confidence measurements
+        this.minInterimConfidence = 0.4;   // Minimum confidence for interim results
+
+        // ========================================
+        // VOICE ACTIVITY DETECTION
+        // ========================================
+
+        this.speechStarted = false;        // Whether speech has started
+        this.speechEnded = false;          // Whether speech has ended
+
+        // ========================================
+        // PERFORMANCE OPTIMIZATIONS
+        // Debouncing and throttling for smooth UX and performance
+        // ========================================
+
         this.debouncedUpdateDisplay = this.debounce(this.updateInputDisplay.bind(this), 50);
         this.debouncedAutoSendDetection = this.debounce(this.startAutoSendDetection.bind(this), 100);
         this.debouncedSpeechEndDetection = this.debounce(this.startSpeechEndDetection.bind(this), 150);
         this.throttledResultProcessing = this.throttle(this.processResults.bind(this), 50);
 
+        // Initialize the service
         this.init();
     }
 

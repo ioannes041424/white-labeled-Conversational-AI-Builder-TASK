@@ -1,34 +1,80 @@
-// Chat functionality for Conversational AI Builder
+/**
+ * Chat functionality for Conversational AI Builder
+ *
+ * This module handles the real-time chat interface including:
+ * - Message sending and receiving via AJAX
+ * - Real-time UI updates and message display
+ * - Audio playback for AI responses
+ * - Speech recognition integration
+ * - Markdown formatting for AI responses
+ * - Auto-scroll and typing indicators
+ *
+ * Architecture:
+ * - Event-driven design with proper error handling
+ * - Integration with Django backend via JSON API
+ * - Automatic audio playback for AI responses
+ * - Progressive enhancement for speech features
+ * - Responsive design with mobile support
+ */
 
 document.addEventListener('DOMContentLoaded', function() {
+
+    // ========================================
+    // DOM ELEMENT REFERENCES
+    // ========================================
+
+    // Core chat elements
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
     const messagesContainer = document.getElementById('messages-container');
     const loadingIndicator = document.getElementById('loading-indicator');
+
+    // Session and bot identification from Django template
     const sessionId = document.getElementById('session-id').value;
     const botId = document.getElementById('bot-id').value;
 
-    // Auto-focus message input
+    // ========================================
+    // INITIAL SETUP AND UX ENHANCEMENTS
+    // ========================================
+
+    /**
+     * Auto-focus the message input for immediate typing
+     * Improves UX by allowing users to start typing immediately
+     */
     messageInput.focus();
 
-    // Scroll to bottom of messages
+    /**
+     * Scroll to bottom of messages container
+     * Ensures the latest messages are always visible
+     */
     function scrollToBottom() {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Initial scroll to bottom
+    // Perform initial scroll to show latest messages
     scrollToBottom();
 
 
 
-    // Handle form submission
+    // ========================================
+    // EVENT HANDLERS FOR MESSAGE SENDING
+    // ========================================
+
+    /**
+     * Handle form submission (when user clicks send button)
+     * Prevents default form submission and uses AJAX instead
+     */
     chatForm.addEventListener('submit', function(e) {
         e.preventDefault();
         sendMessage();
     });
 
-    // Handle Enter key (without Shift)
+    /**
+     * Handle Enter key for quick message sending
+     * Enter alone sends message, Shift+Enter adds new line
+     * This provides intuitive keyboard shortcuts for users
+     */
     messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -36,72 +82,101 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Send message function
+    // ========================================
+    // CORE MESSAGE SENDING FUNCTIONALITY
+    // ========================================
+
+    /**
+     * Main function to send user messages and handle AI responses
+     *
+     * Process Flow:
+     * 1. Validate and prepare user message
+     * 2. Update UI with user message immediately
+     * 3. Send AJAX request to Django backend
+     * 4. Process AI response and update UI
+     * 5. Auto-play generated audio response
+     * 6. Handle errors and edge cases
+     *
+     * This function integrates with:
+     * - Django SendMessageView for backend processing
+     * - ConversationManager for AI response generation
+     * - GoogleCloudTTSService for audio synthesis
+     */
     function sendMessage() {
         const message = messageInput.value.trim();
+
+        // Validate message content
         if (!message) return;
 
-        // Disable form
+        // Update UI state to prevent double-sending
         setFormState(false);
 
-        // Clear input
+        // Clear input immediately for better UX
         messageInput.value = '';
 
-        // Add user message to UI immediately
+        // Add user message to UI immediately (optimistic update)
         addMessageToUI('user', message);
 
-        // Show typing indicator
+        // Show typing indicator while AI processes
         showTypingIndicator();
 
-        // Send to server
+        // Send AJAX request to Django backend
         fetch(`/chat/${botId}/send/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
+                'X-CSRFToken': getCsrfToken()  // Django CSRF protection
             },
             body: JSON.stringify({
                 message: message,
-                session_id: sessionId
+                session_id: sessionId  // Link to conversation session
             })
         })
         .then(response => response.json())
         .then(data => {
+            // Hide typing indicator
             hideTypingIndicator();
 
             if (data.success) {
-                // Add AI response to UI
+                // Add AI response to UI with audio support
                 addMessageToUI('ai', data.ai_message.content, data.ai_message.audio_url);
 
                 // MANDATORY: Auto-play audio for every AI response
+                // This is a core feature of the conversational AI experience
                 if (data.ai_message.audio_url) {
-                    // Immediate auto-play without delay for seamless experience
+                    // Immediate auto-play for seamless voice interaction
                     autoPlayAudio(data.ai_message.audio_url);
                 } else {
-                    // Log when audio is missing (this should not happen)
-                    console.warn('AI response received without audio - this should not happen');
+                    // Log when audio is missing (should not happen in normal operation)
+                    console.warn('⚠️ AI response received without audio - this should not happen');
                     if (data.audio_error) {
-                        console.error('Audio generation error:', data.audio_error);
+                        console.error('🔊 Audio generation error:', data.audio_error);
                     }
                 }
 
             } else {
-                // Show error message
+                // Handle server-side errors
                 addErrorMessage(data.error || 'Failed to send message');
             }
         })
         .catch(error => {
+            // Handle network and client-side errors
             hideTypingIndicator();
-            console.error('Error:', error);
+            console.error('❌ Network error:', error);
             addErrorMessage('Network error. Please try again.');
         })
         .finally(() => {
+            // Always restore form state and focus
             setFormState(true);
             messageInput.focus();
         });
     }
 
-    // Expose sendMessage globally for speech recognition auto-send
+    /**
+     * Expose sendMessage globally for speech recognition integration
+     * This allows the speech recognition module to trigger message sending
+     * after converting speech to text
+     */
     window.chatSendMessage = sendMessage;
 
     // Add message to UI
